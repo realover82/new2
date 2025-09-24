@@ -46,6 +46,8 @@ def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
     except Exception as e:
         return None
 
+# rftx.py 파일의 analyze_RfTx_data 함수 전체를 아래 코드로 교체하세요.
+
 def analyze_RfTx_data(df):
     """RfTx 데이터의 분석 로직을 담고 있는 함수"""
     # 데이터 전처리
@@ -60,12 +62,10 @@ def analyze_RfTx_data(df):
     if 'RfTxPC' not in df.columns:
         df['RfTxPC'] = 'DefaultJig'
 
-    # 1. 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
-    #    이렇게 하면 데이터 분석 과정에서 Jig별로 PASS 기록을 효율적으로 확인할 수 있습니다.
+    # 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
     jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('RfTxPC')['SNumber'].unique().apply(set).to_dict()
 
     for jig, group in df.groupby('RfTxPC'):
-        # 유효한 날짜 데이터가 없는 그룹은 건너뜁니다.
         group = group.dropna(subset=['RfTxStamp'])
         if group.empty:
             continue
@@ -76,25 +76,18 @@ def analyze_RfTx_data(df):
             
             date_iso = pd.to_datetime(d).strftime("%Y-%m-%d")
 
-            # 2. 현재 Jig의 PASS SNumber 집합을 가져옵니다.
             current_jig_passed_sns = jig_pass_history.get(jig, set())
             
             # 각 카테고리별 데이터프레임 필터링
             pass_df = day_group[day_group['PassStatusNorm'] == 'O']
             fail_df = day_group[day_group['PassStatusNorm'] == 'X']
             
-            # 3. 가성불량: 현재 Jig에서 FAIL이면서, 동일한 Jig에서 PASS를 기록했던 SNumber
+            # 가성불량: 현재 Jig에서 FAIL이면서, 동일한 Jig에서 PASS를 기록했던 SNumber
             false_defect_df = fail_df[fail_df['SNumber'].isin(current_jig_passed_sns)]
             
-            # 4. 진성불량: 현재 Jig에서 FAIL이지만, 동일한 Jig에서 PASS를 기록한 적이 없는 SNumber
+            # 진성불량: 현재 Jig에서 FAIL이지만, 동일한 Jig에서 PASS를 기록한 적이 없는 SNumber
             true_defect_df = fail_df[~fail_df['SNumber'].isin(current_jig_passed_sns)]
-
-            # 각 카테고리별 상세 목록 (고유 SN) 생성
-            pass_sns = pass_df['SNumber'].unique().tolist()
-            false_defect_sns = false_defect_df['SNumber'].unique().tolist()
-            true_defect_sns = true_defect_df['SNumber'].unique().tolist()
-            fail_sns = fail_df['SNumber'].unique().tolist()
-
+            
             # 각 항목별 건수 (테스트 횟수)
             pass_count = len(pass_df)
             false_defect_count = len(false_defect_df)
@@ -106,6 +99,7 @@ def analyze_RfTx_data(df):
             if jig not in summary_data:
                 summary_data[jig] = {}
             
+            # SNumber 리스트 대신, DataFrame의 모든 행을 딕셔너리 리스트로 변환하여 저장
             summary_data[jig][date_iso] = {
                 'total_test': total_test,
                 'pass': pass_count,
@@ -114,15 +108,16 @@ def analyze_RfTx_data(df):
                 'fail': fail_count,
                 'pass_rate': f"{rate:.1f}%",
                 
-                'pass_sns': pass_sns,
-                'false_defect_sns': false_defect_sns,
-                'true_defect_sns': true_defect_sns,
-                'fail_sns': fail_sns,
+                # SNumber 목록 대신, DataFrame의 모든 데이터를 저장합니다.
+                'pass_data': pass_df.to_dict('records'),
+                'false_defect_data': false_defect_df.to_dict('records'),
+                'true_defect_data': true_defect_df.to_dict('records'),
+                'fail_data': fail_df.to_dict('records'),
 
-                'pass_unique_count': len(pass_sns),
-                'false_defect_unique_count': len(false_defect_sns),
-                'true_defect_unique_count': len(true_defect_sns),
-                'fail_unique_count': len(fail_sns)
+                'pass_unique_count': len(pass_df['SNumber'].unique()),
+                'false_defect_unique_count': len(false_defect_df['SNumber'].unique()),
+                'true_defect_unique_count': len(true_defect_df['SNumber'].unique()),
+                'fail_unique_count': len(fail_df['SNumber'].unique())
             }
     
     all_dates = sorted(list(df['RfTxStamp'].dt.date.dropna().unique()))

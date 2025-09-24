@@ -10,7 +10,9 @@ from csv_RfTx import read_csv_with_dynamic_header_for_RfTx, analyze_RfTx_data
 from csv_Semi import read_csv_with_dynamic_header_for_Semi, analyze_Semi_data
 from csv_Batadc import read_csv_with_dynamic_header_for_Batadc, analyze_Batadc_data
 
-def display_analysis_result(analysis_key, file_name, jig_col_name):
+# streamlit_app.py 파일의 display_analysis_result 함수 전체를 아래 코드로 교체하세요.
+
+def display_analysis_result(analysis_key, file_name, props):
     """ session_state에 저장된 분석 결과를 Streamlit에 표시하는 함수 """
     if st.session_state.analysis_results[analysis_key] is None:
         st.error("데이터 로드에 실패했습니다. 파일 형식을 확인해주세요.")
@@ -26,7 +28,7 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     
     with filter_col1:
-        jig_list = sorted(df_raw[jig_col_name].dropna().unique().tolist()) if jig_col_name in df_raw.columns else []
+        jig_list = sorted(df_raw[props['jig_col']].dropna().unique().tolist()) if props['jig_col'] in df_raw.columns else []
         selected_jig = st.selectbox("PC(Jig) 선택", ["전체"] + jig_list, key=f"select_{analysis_key}")
     
     if not all_dates:
@@ -55,7 +57,7 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
     jigs_to_display = jig_list if selected_jig == "전체" else [selected_jig]
     
     daily_aggregated_data = {}
-    for date_obj in all_dates: # 전체 날짜에 대해 집계 데이터 미리 계산
+    for date_obj in all_dates:
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
         for jig in jigs_to_display:
             data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
@@ -123,7 +125,7 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
         chart_df_melted = chart_df.melt('date', var_name='불량 유형', value_name='수량')
 
         common_chart = alt.Chart(chart_df_melted).encode(
-            x=alt.X('date:T', axis=alt.Axis(title='날짜')),#, format='%Y-%m-%d')),
+            x=alt.X('date:T', axis=alt.Axis(title='날짜')),
             y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수')),
             color=alt.Color('불량 유형', legend=alt.Legend(title="불량 유형")),
             tooltip=['date:T', '불량 유형', '수량']
@@ -153,42 +155,26 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
             labels = ['PASS', '가성불량', '진성불량', 'FAIL']
 
             for cat, label in zip(categories, labels):
-                # 1. 원본 데이터프레임에서 필터링하여 전체 데이터 가져오기
-                if cat == 'pass':
-                    filtered_df = df_raw[(df_raw[jig_col_name] == jig) & (df_raw['PassStatusNorm'] == 'O')]
-                elif cat == 'fail':
-                    filtered_df = df_raw[(df_raw[jig_col_name] == jig) & (df_raw['PassStatusNorm'] == 'X')]
-                else:
-                    # '가성불량'과 '진성불량'은 SNumber 기준으로 필터링
-                    if cat == 'false_defect':
-                        sn_list = data_point.get(f'{cat}_sns', [])
-                        filtered_df = df_raw[df_raw['SNumber'].isin(sn_list)]
-                    else: # 'true_defect'
-                        sn_list = data_point.get(f'{cat}_sns', [])
-                        filtered_df = df_raw[df_raw['SNumber'].isin(sn_list)]
-
-                # 날짜 필터링
-                filtered_df = filtered_df[filtered_df[f'{analysis_key}Stamp'].dt.date == date_obj]
+                # 변경된 analyze 함수에 맞춰 'data'를 가져옵니다.
+                full_data_list = data_point.get(f'{cat}_data', [])
                 
-                if filtered_df.empty:
+                if not full_data_list:
                     continue
 
-                count = len(filtered_df)
-                unique_count = len(filtered_df['SNumber'].unique())
+                count = len(full_data_list)
+                unique_count = len(set(d['SNumber'] for d in full_data_list))
 
                 expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
                 
                 with st.expander(expander_title, expanded=False):
-                    # 2. st.session_state에서 필드 매핑 가져오기
                     fields_to_display = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
                     
                     if not fields_to_display:
                         st.info("표시할 필드가 정의되지 않았습니다.")
                         continue
 
-                    # 3. 데이터프레임을 순회하며 각 필드 출력
-                    for _, row in filtered_df.iterrows():
-                        formatted_fields = [f"{field}: {row.get(field, 'N/A')}" for field in fields_to_display]
+                    for item in full_data_list:
+                        formatted_fields = [f"{field}: {item.get(field, 'N/A')}" for field in fields_to_display]
                         st.text(", ".join(formatted_fields))
 
     st.markdown("---")
@@ -224,10 +210,10 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
             if 'SNumber' in df_display.columns and pd.api.types.is_string_dtype(df_display['SNumber']):
                 df_display = df_display[df_display['SNumber'].str.contains(query, na=False, case=False)]
             else:
-                 try:
-                     df_display = df_display[df_display.apply(lambda row: query.lower() in str(row.values).lower(), axis=1)]
-                 except Exception:
-                     st.warning("SNumber 검색을 지원하지 않는 데이터 형식입니다.")
+                try:
+                    df_display = df_display[df_display.apply(lambda row: query.lower() in str(row.values).lower(), axis=1)]
+                except Exception:
+                    st.warning("SNumber 검색을 지원하지 않는 데이터 형식입니다.")
 
         if applied_filters['columns']:
             existing_cols = [col for col in applied_filters['columns'] if col in df_display.columns]
