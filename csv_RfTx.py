@@ -54,7 +54,7 @@ def analyze_RfTx_data(df):
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
 
-    df['RfTxStamp'] = pd.to_datetime(df['RfTxStamp'], errors='coerce')
+    df['RfTxStamp'] = pd.to_datetime(df['RfTxStamp'], unit='ms', errors='coerce')
     df['PassStatusNorm'] = df['RfTxPass'].fillna('').astype(str).str.strip().str.upper()
 
     summary_data = {}
