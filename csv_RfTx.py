@@ -64,6 +64,10 @@ def analyze_RfTx_data(df):
     
     if 'RfTxPC' not in df.columns:
         df['RfTxPC'] = 'DefaultJig'
+    # 1. 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
+    #    이렇게 하면 데이터 분석 과정에서 Jig별로 PASS 기록을 효율적으로 확인할 수 있습니다.
+    jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('RfTxPC')['SNumber'].unique().apply(set).to_dict()
+    
 
     for jig, group in df.groupby('RfTxPC'):
         # 유효한 날짜 데이터가 없는 그룹은 건너뜁니다.
@@ -77,7 +81,11 @@ def analyze_RfTx_data(df):
             
             date_iso = pd.to_datetime(d).strftime("%Y-%m-%d")
 
+            # 2. 현재 Jig의 PASS SNumber 집합을 가져옵니다.
+            current_jig_passed_sns = jig_pass_history.get(jig, set())
+            
             # 'O'가 한 번이라도 있었던 SNumber 목록 (해당 일자 기준)
+            ever_passed_sns = day_group[day_group['PassStatusNorm'] == 'O']['SNumber'].unique()
             ever_passed_sns = day_group[day_group['PassStatusNorm'] == 'O']['SNumber'].unique()
 
             # 각 카테고리별 데이터프레임 필터링
