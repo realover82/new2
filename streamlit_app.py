@@ -99,40 +99,32 @@ def display_analysis_result(analysis_key, file_name, props):
         if st.button("막대 그래프", key=f"bar_chart_btn_{analysis_key}"):
             st.session_state[chart_mode_key] = 'bar'
     
-    # 1. 모든 raw 데이터에서 필터링
     filtered_df_for_chart = df_raw[
         (df_raw[props['jig_col']].isin(jigs_to_display)) &
         (df_raw[props['timestamp_col']].dt.date.isin(filtered_dates))
     ].copy()
     
-    # 'PassStatusNorm'이 'X'인 데이터만 남깁니다. (PASS 데이터 제외)
     filtered_df_for_chart = filtered_df_for_chart[filtered_df_for_chart['PassStatusNorm'] == 'X']
 
-    # 2. 시간별 데이터 집계
     if not filtered_df_for_chart.empty:
-        # 가성불량/진성불량 분리를 위해 SNumber의 PASS 기록을 미리 계산합니다.
         jig_pass_history = df_raw[df_raw['PassStatusNorm'] == 'O'].groupby(props['jig_col'])['SNumber'].unique().apply(set).to_dict()
         current_jig_passed_sns = jig_pass_history.get(selected_jig, set()) if selected_jig != "전체" else set(df_raw[df_raw['PassStatusNorm'] == 'O']['SNumber'].unique())
         
-        # 가성/진성 불량 컬럼을 생성합니다.
         filtered_df_for_chart['불량 유형'] = filtered_df_for_chart['SNumber'].apply(
             lambda sn: '가성불량' if sn in current_jig_passed_sns else '진성불량'
         )
 
-        # 시간대별/유형별로 그룹화하고 건수를 셉니다.
         chart_data_list = filtered_df_for_chart.groupby([
             pd.Grouper(key=props['timestamp_col'], freq='H'),
             '불량 유형'
         ]).size().reset_index(name='수량')
         
-        # 'datetime' 컬럼의 날짜 부분과 시간 부분을 분리합니다.
         chart_data_list['날짜'] = chart_data_list[props['timestamp_col']].dt.date
         chart_data_list['시간'] = chart_data_list[props['timestamp_col']].dt.time
-
+        
     if not filtered_df_for_chart.empty:
         chart_df_melted = chart_data_list.rename(columns={props['timestamp_col']: 'datetime'})
 
-        # Altair 차트 생성
         base = alt.Chart(chart_df_melted).encode(
             x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%H:%M')),
             y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수'))
@@ -140,7 +132,6 @@ def display_analysis_result(analysis_key, file_name, props):
             title='시간대별 불량 건수 추이'
         )
         
-        # 라인 또는 막대 차트
         if st.session_state[chart_mode_key] == 'line':
             chart = base.mark_line(point=True).encode(
                 color=alt.Color('불량 유형', legend=alt.Legend(title="불량 유형")),
@@ -152,15 +143,15 @@ def display_analysis_result(analysis_key, file_name, props):
                 tooltip=['datetime:T', '불량 유형', '수량']
             )
         
-        # 날짜별로 그래프를 분할
+        # 날짜별로 그래프를 분할하고 헤더 포맷을 YYYYMMDD로 변경합니다.
         final_chart = chart.facet(
-            column=alt.Column('날짜:N', header=alt.Header(titleOrient="bottom", labelOrient="bottom"))
+            column=alt.Column('날짜:N', header=alt.Header(titleOrient="bottom", labelOrient="bottom", format='%Y%m%d'))
         ).resolve_scale(
             x='independent',
             y='independent'
         )
 
-        st.altair_chart(final_chart, use_container_width=False) # container_width를 False로 설정하여 가로 스크롤 가능하게 함
+        st.altair_chart(final_chart, use_container_width=False)
     else:
         st.info("그래프를 표시할 데이터가 없습니다.")
 
