@@ -1,8 +1,3 @@
-#
-# csv_RfTx.py
-# 이 파일은 Streamlit 앱에서 모듈로 사용됩니다.
-# 따라서, 콘솔 출력 관련 코드(print, sys, io 등)는 모두 제거했습니다.
-
 import pandas as pd
 import numpy as np
 import io
@@ -18,39 +13,6 @@ def clean_string_format(value):
         return value[2:-1]
     return value
 
-def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
-    """RfTx 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수"""
-    try:
-        file_content = io.BytesIO(uploaded_file.getvalue())
-        # 다양한 인코딩 시도
-        encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
-        df = None
-        for encoding in encodings:
-            try:
-                file_content.seek(0)
-                df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
-                keywords = ['SNumber', 'RfTxStamp', 'RfTxPC', 'RfTxPass']
-                # st.session_state에 직접 키워드 리스트 저장
-                if 'field_mapping' not in st.session_state:
-                    st.session_state.field_mapping = {}
-                st.session_state.field_mapping['RfTx'] = keywords
-                header_row = None
-                for i, row in df_temp.iterrows():
-                    row_values = [str(x).strip() for x in row.values if pd.notna(x)]
-                    if all(keyword in row_values for keyword in keywords):
-                        header_row = i
-                        break
-                
-                if header_row is not None:
-                    file_content.seek(0)
-                    df = pd.read_csv(file_content, header=header_row, encoding=encoding)
-                    return df
-            except Exception:
-                continue
-        return None
-    except Exception as e:
-        return None
-
 def analyze_RfTx_data(df):
     """RfTx 데이터의 분석 로직을 담고 있는 함수"""
     # 데이터 전처리
@@ -64,10 +26,10 @@ def analyze_RfTx_data(df):
     
     if 'RfTxPC' not in df.columns:
         df['RfTxPC'] = 'DefaultJig'
+
     # 1. 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
     #    이렇게 하면 데이터 분석 과정에서 Jig별로 PASS 기록을 효율적으로 확인할 수 있습니다.
     jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('RfTxPC')['SNumber'].unique().apply(set).to_dict()
-    
 
     for jig, group in df.groupby('RfTxPC'):
         # 유효한 날짜 데이터가 없는 그룹은 건너뜁니다.
@@ -84,15 +46,15 @@ def analyze_RfTx_data(df):
             # 2. 현재 Jig의 PASS SNumber 집합을 가져옵니다.
             current_jig_passed_sns = jig_pass_history.get(jig, set())
             
-            # 'O'가 한 번이라도 있었던 SNumber 목록 (해당 일자 기준)
-            ever_passed_sns = day_group[day_group['PassStatusNorm'] == 'O']['SNumber'].unique()
-            ever_passed_sns = day_group[day_group['PassStatusNorm'] == 'O']['SNumber'].unique()
-
             # 각 카테고리별 데이터프레임 필터링
             pass_df = day_group[day_group['PassStatusNorm'] == 'O']
             fail_df = day_group[day_group['PassStatusNorm'] == 'X']
-            false_defect_df = fail_df[fail_df['SNumber'].isin(ever_passed_sns)]
-            true_defect_df = fail_df[~fail_df['SNumber'].isin(ever_passed_sns)]
+            
+            # 3. 가성불량: 현재 Jig에서 FAIL이면서, 동일한 Jig에서 PASS를 기록했던 SNumber
+            false_defect_df = fail_df[fail_df['SNumber'].isin(current_jig_passed_sns)]
+            
+            # 4. 진성불량: 현재 Jig에서 FAIL이지만, 동일한 Jig에서 PASS를 기록한 적이 없는 SNumber
+            true_defect_df = fail_df[~fail_df['SNumber'].isin(current_jig_passed_sns)]
 
             # 각 카테고리별 상세 목록 (고유 SN) 생성
             pass_sns = pass_df['SNumber'].unique().tolist()
