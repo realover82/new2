@@ -99,21 +99,47 @@ def display_analysis_result(analysis_key, file_name, props):
         if st.button("막대 그래프", key=f"bar_chart_btn_{analysis_key}"):
             st.session_state[chart_mode_key] = 'bar'
     
-    chart_data_list = [
-        {'date': date, '가성불량': data['false_defect'], '진성불량': data['true_defect'], 'FAIL': data['fail']}
-        for date, data in daily_aggregated_data.items() if start_date <= date <= end_date
+    # 1. 모든 raw 데이터에서 필터링
+    filtered_df_for_chart = df_raw[
+        (df_raw[props['jig_col']].isin(jigs_to_display)) &
+        (df_raw[props['timestamp_col']].dt.date.isin(filtered_dates))
     ]
 
-    if chart_data_list:
-        chart_df = pd.DataFrame(chart_data_list)
-        chart_df_melted = chart_df.melt('date', var_name='불량 유형', value_name='수량')
+    # 2. 시간별 데이터 집계
+    if not filtered_df_for_chart.empty:
+        # 시간 단위로 그룹화
+        time_group = filtered_df_for_chart.groupby(pd.Grouper(key=props['timestamp_col'], freq='H'))
+
+        # 시간별 PASS/FAIL 건수 계산
+        time_data_list = []
+        for time_stamp, group_df in time_group:
+            fail_df = group_df[group_df['PassStatusNorm'] == 'X']
+            pass_df = group_df[group_df['PassStatusNorm'] == 'O']
+            
+            # 가성/진성 불량 분리
+            passed_sns = group_df[group_df['PassStatusNorm'] == 'O']['SNumber'].unique()
+            false_defect_count = len(fail_df[fail_df['SNumber'].isin(passed_sns)])
+            true_defect_count = len(fail_df[~fail_df['SNumber'].isin(passed_sns)])
+            
+            time_data_list.append({
+                'datetime': time_stamp,
+                'PASS': len(pass_df),
+                'FAIL': len(fail_df),
+                '가성불량': false_defect_count,
+                '진성불량': true_defect_count
+            })
+
+    if time_data_list:
+        chart_df = pd.DataFrame(time_data_list)
+        chart_df_melted = chart_df.melt('datetime', var_name='불량 유형', value_name='수량')
 
         common_chart = alt.Chart(chart_df_melted).encode(
-            x=alt.X('date:T', axis=alt.Axis(title='날짜')),
-            y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수')),
+            # X축을 시간 단위로 설정
+            x=alt.X('datetime:T', axis=alt.Axis(title='시간', format='%H:%M')),
+            y=alt.Y('수량:Q', axis=alt.Axis(title='건수')),
             color=alt.Color('불량 유형', legend=alt.Legend(title="불량 유형")),
-            tooltip=['date:T', '불량 유형', '수량']
-        ).properties(title='일자별 불량 건수 추이').interactive()
+            tooltip=['datetime:T', '불량 유형', '수량']
+        ).properties(title='시간대별 불량 건수 추이').interactive()
 
         if st.session_state[chart_mode_key] == 'line':
             st.altair_chart(common_chart.mark_line(point=True), use_container_width=True)
