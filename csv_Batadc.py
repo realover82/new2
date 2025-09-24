@@ -106,10 +106,16 @@ def analyze_Batadc_data(df):
                 'true_defect': true_defect_count,
                 'fail': fail_count,
                 'pass_rate': f"{rate:.1f}%",
+
                 'pass_sns': pass_sns,
                 'false_defect_sns': false_defect_sns,
                 'true_defect_sns': true_defect_sns,
-                'fail_sns': fail_sns
+                'fail_sns': fail_sns,
+
+                'pass_unique_count': len(pass_sns),
+                'false_defect_unique_count': len(false_defect_sns),
+                'true_defect_unique_count': len(true_defect_sns),
+                'fail_unique_count': len(fail_sns)
             }
     
     all_dates = sorted(list(df['BatadcStamp'].dt.date.dropna().unique()))
