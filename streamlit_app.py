@@ -151,20 +151,47 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
             st.markdown(f"**PC(Jig): {jig}**")
             categories = ['pass', 'false_defect', 'true_defect', 'fail']
             labels = ['PASS', '가성불량', '진성불량', 'FAIL']
-            
+
             for cat, label in zip(categories, labels):
-                count = data_point.get(cat, 0)
-                if count > 0:
-                    sns_list = data_point.get(f'{cat}_sns', [])
-                    # '상세 내역'을 표시하는 루프 안쪽
-                    unique_count = data_point.get(f'{cat}_unique_count', 0)
-                    expander_title = f"{label} - {count}건 (고유 SN: {unique_count}건)"
-                    with st.expander(expander_title, expanded=False):
-                        if sns_list:
-                            st.text("\n".join(sns_list))
-                        else:
-                            st.info("해당 내역이 없습니다.")
-        st.markdown("---")
+                # 1. 원본 데이터프레임에서 필터링하여 전체 데이터 가져오기
+                if cat == 'pass':
+                    filtered_df = df_raw[(df_raw[jig_col_name] == jig) & (df_raw['PassStatusNorm'] == 'O')]
+                elif cat == 'fail':
+                    filtered_df = df_raw[(df_raw[jig_col_name] == jig) & (df_raw['PassStatusNorm'] == 'X')]
+                else:
+                    # '가성불량'과 '진성불량'은 SNumber 기준으로 필터링
+                    if cat == 'false_defect':
+                        sn_list = data_point.get(f'{cat}_sns', [])
+                        filtered_df = df_raw[df_raw['SNumber'].isin(sn_list)]
+                    else: # 'true_defect'
+                        sn_list = data_point.get(f'{cat}_sns', [])
+                        filtered_df = df_raw[df_raw['SNumber'].isin(sn_list)]
+
+                # 날짜 필터링
+                filtered_df = filtered_df[filtered_df[f'{analysis_key}Stamp'].dt.date == date_obj]
+                
+                if filtered_df.empty:
+                    continue
+
+                count = len(filtered_df)
+                unique_count = len(filtered_df['SNumber'].unique())
+
+                expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                
+                with st.expander(expander_title, expanded=False):
+                    # 2. st.session_state에서 필드 매핑 가져오기
+                    fields_to_display = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+                    
+                    if not fields_to_display:
+                        st.info("표시할 필드가 정의되지 않았습니다.")
+                        continue
+
+                    # 3. 데이터프레임을 순회하며 각 필드 출력
+                    for _, row in filtered_df.iterrows():
+                        formatted_fields = [f"{field}: {row.get(field, 'N/A')}" for field in fields_to_display]
+                        st.text(", ".join(formatted_fields))
+
+    st.markdown("---")
 
 
     # --- DB 원본 확인 및 상세 검색 기능 ---
