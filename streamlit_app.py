@@ -64,25 +64,47 @@ def display_analysis_result(analysis_key, file_name, props):
                     daily_totals[key] += data_point.get(key, 0)
         daily_aggregated_data[date_obj] = daily_totals
 
-    # --- 최종일 데이터 요약 (KPI 카드) ---
+    # --- 요약 (KPI 카드) ---
     st.subheader(f"요약: {end_date.strftime('%Y-%m-%d')}")
     
-    last_day_data = daily_aggregated_data.get(end_date)
-    prev_date = end_date - timedelta(days=1)
-    prev_day_data = daily_aggregated_data.get(prev_date)
+    # 선택된 날짜 범위와 PC에 맞춰 요약 정보 표시
+    filtered_df_raw = df_raw[(df_raw[props['jig_col']].isin(jigs_to_display)) & (df_raw[props['timestamp_col']].dt.date.isin(filtered_dates))]
+    
+    if not filtered_df_raw.empty:
+        total_tests = len(filtered_df_raw)
+        pass_tests = len(filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'O'])
+        fail_tests = len(filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'X'])
+        
+        fail_df_filtered = filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'X']
+        passed_sns = filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'O']['SNumber'].unique()
 
-    delta_false, delta_true = None, None
-    if last_day_data and prev_day_data:
-        delta_false = last_day_data['false_defect'] - prev_day_data['false_defect']
-        delta_true = last_day_data['true_defect'] - prev_day_data['true_defect']
+        false_defect_df_filtered = fail_df_filtered[fail_df_filtered['SNumber'].isin(passed_sns)]
+        true_defect_df_filtered = fail_df_filtered[~fail_df_filtered['SNumber'].isin(passed_sns)]
 
-    kpi_cols = st.columns(5)
-    if last_day_data:
-        kpi_cols[0].metric("총 테스트 수", f"{last_day_data['total_test']:,}")
-        kpi_cols[1].metric("PASS", f"{last_day_data['pass']:,}")
-        kpi_cols[2].metric("FAIL", f"{last_day_data['fail']:,}")
-        kpi_cols[3].metric("가성불량", f"{last_day_data['false_defect']:,}", delta=f"{delta_false}" if delta_false is not None else None)
-        kpi_cols[4].metric("진성불량", f"{last_day_data['true_defect']:,}", delta=f"{delta_true}" if delta_true is not None else None)
+        false_defect_count = len(false_defect_df_filtered)
+        true_defect_count = len(true_defect_df_filtered)
+
+        # 델타 계산을 위해 바로 이전 날짜 데이터 집계
+        prev_date = start_date - timedelta(days=1)
+        prev_day_data = df_raw[(df_raw[props['jig_col']].isin(jigs_to_display)) & (df_raw[props['timestamp_col']].dt.date == prev_date)]
+        
+        prev_pass_sns = prev_day_data[prev_day_data['PassStatusNorm'] == 'O']['SNumber'].unique()
+        prev_fail_df = prev_day_data[prev_day_data['PassStatusNorm'] == 'X']
+        prev_false_defect_count = len(prev_fail_df[prev_fail_df['SNumber'].isin(prev_pass_sns)])
+        prev_true_defect_count = len(prev_fail_df[~prev_fail_df['SNumber'].isin(prev_pass_sns)])
+        
+        delta_false = false_defect_count - prev_false_defect_count
+        delta_true = true_defect_count - prev_true_defect_count
+
+        kpi_cols = st.columns(5)
+        kpi_cols[0].metric("총 테스트 수", f"{total_tests:,}")
+        kpi_cols[1].metric("PASS", f"{pass_tests:,}")
+        kpi_cols[2].metric("FAIL", f"{fail_tests:,}")
+        kpi_cols[3].metric("가성불량", f"{false_defect_count:,}", delta=f"{delta_false}" if delta_false is not None else None)
+        kpi_cols[4].metric("진성불량", f"{true_defect_count:,}", delta=f"{delta_true}" if delta_true is not None else None)
+    else:
+        st.info("선택된 조건에 해당하는 데이터가 없습니다.")
+
     st.markdown("---")
 
 
@@ -91,7 +113,7 @@ def display_analysis_result(analysis_key, file_name, props):
     report_data = {'지표': ['총 테스트 수', 'PASS', '가성불량', '진성불량', 'FAIL']}
     for date_obj in filtered_dates:
         daily_totals = daily_aggregated_data.get(date_obj, {})
-        date_str_col = date_obj.strftime('%y%m%d')
+        date_str_col = date_obj.strftime('%y-%m-%d')
         report_data[date_str_col] = [
             daily_totals.get('total_test', 0), daily_totals.get('pass', 0), daily_totals.get('false_defect', 0),
             daily_totals.get('true_defect', 0), daily_totals.get('fail', 0)
@@ -138,85 +160,95 @@ def display_analysis_result(analysis_key, file_name, props):
 
     st.markdown("---")
 
-    # --- 상세 내역 (날짜별 펼치기) ---
+    # --- 상세 내역 (일별) ---
     st.subheader("상세 내역 (일별)")
     
-    # 세션 상태에 상세 보기 모드를 저장할 변수를 초기화합니다.
-    if f'detail_mode_{analysis_key}' not in st.session_state:
-        st.session_state[f'detail_mode_{analysis_key}'] = 'all'
+    # 1. 상세 내역 보기 제어용 세션 상태 변수 초기화
+    if f'show_details_{analysis_key}' not in st.session_state:
+        st.session_state[f'show_details_{analysis_key}'] = False
 
-    # 상세 보기 모드 버튼을 생성합니다.
-    detail_col1, detail_col2, detail_col3 = st.columns(3)
-    with detail_col1:
-        if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
+    # 2. 상세 내역 조회 버튼 추가
+    if st.button("상세 내역 조회", key=f"show_details_btn_{analysis_key}"):
+        st.session_state[f'show_details_{analysis_key}'] = True
+
+    # 3. 버튼이 눌리면 상세 내역 표시
+    if st.session_state[f'show_details_{analysis_key}']:
+        # 세션 상태에 상세 보기 모드를 저장할 변수를 초기화합니다.
+        if f'detail_mode_{analysis_key}' not in st.session_state:
             st.session_state[f'detail_mode_{analysis_key}'] = 'all'
-    with detail_col2:
-        if st.button("불량만 보기", key=f"detail_defects_{analysis_key}"):
-            st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
-    with detail_col3:
-        if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
-            st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
-    
-    # '상세 보기' 날짜 선택 버튼
-    st.markdown("##### 상세 내역 날짜 선택")
-    detail_date_cols = st.columns(len(filtered_dates))
-    
-    for i, date_obj in enumerate(filtered_dates):
-        with detail_date_cols[i]:
-            if st.button(date_obj.strftime("%m-%d"), key=f"detail_date_{analysis_key}_{date_obj}"):
-                st.session_state[f'detail_mode_{analysis_key}'] = date_obj.strftime("%Y-%m-%d")
 
-    # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
-    current_mode = st.session_state[f'detail_mode_{analysis_key}']
-    
-    # 모든 날짜를 보여줄지, 특정 날짜만 보여줄지 결정합니다.
-    dates_to_display = filtered_dates
-    if current_mode not in ['all', 'defects', 'pass']:
-        dates_to_display = [datetime.strptime(current_mode, "%Y-%m-%d").date()]
-
-    for date_obj in dates_to_display:
-        st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
+        # 상세 보기 모드 버튼을 생성합니다.
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+        with detail_col1:
+            if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
+                st.session_state[f'detail_mode_{analysis_key}'] = 'all'
+        with detail_col2:
+            if st.button("불량만 보기", key=f"detail_defects_{analysis_key}"):
+                st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
+        with detail_col3:
+            if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
+                st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
         
-        for jig in jigs_to_display:
-            data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
-            if not data_point or data_point.get('total_test', 0) == 0:
-                continue
+        # '상세 보기' 날짜 선택 버튼
+        st.markdown("##### 상세 내역 날짜 선택")
+        detail_date_cols = st.columns(len(filtered_dates))
+        
+        for i, date_obj in enumerate(filtered_dates):
+            with detail_date_cols[i]:
+                if st.button(date_obj.strftime("%m-%d"), key=f"detail_date_{analysis_key}_{date_obj}"):
+                    st.session_state[f'detail_mode_{analysis_key}'] = date_obj.strftime("%Y-%m-%d")
 
-            st.markdown(f"**PC(Jig): {jig}**")
+        # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
+        current_mode = st.session_state[f'detail_mode_{analysis_key}']
+        
+        # 모든 날짜를 보여줄지, 특정 날짜만 보여줄지 결정합니다.
+        dates_to_display = filtered_dates
+        if current_mode not in ['all', 'defects', 'pass']:
+            dates_to_display = [datetime.strptime(current_mode, "%Y-%m-%d").date()]
+
+        for date_obj in dates_to_display:
+            st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
             
-            # 현재 모드에 따라 표시할 카테고리 필터링
-            if current_mode == 'defects':
-                categories = ['false_defect', 'true_defect']
-                labels = ['가성불량', '진성불량']
-            elif current_mode == 'pass':
-                categories = ['pass']
-                labels = ['PASS']
-            else: # 'all' 또는 특정 날짜 선택
-                categories = ['pass', 'false_defect', 'true_defect', 'fail']
-                labels = ['PASS', '가성불량', '진성불량', 'FAIL']
-
-            for cat, label in zip(categories, labels):
-                full_data_list = data_point.get(f'{cat}_data', [])
-                
-                if not full_data_list:
+            for jig in jigs_to_display:
+                data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
+                if not data_point or data_point.get('total_test', 0) == 0:
                     continue
 
-                count = len(full_data_list)
-                unique_count = len(set(d['SNumber'] for d in full_data_list))
-
-                expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                st.markdown(f"**PC(Jig): {jig}**")
                 
-                with st.expander(expander_title, expanded=False):
-                    fields_to_display = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+                # 현재 모드에 따라 표시할 카테고리 필터링
+                if current_mode == 'defects':
+                    categories = ['false_defect', 'true_defect']
+                    labels = ['가성불량', '진성불량']
+                elif current_mode == 'pass':
+                    categories = ['pass']
+                    labels = ['PASS']
+                else: # 'all' 또는 특정 날짜 선택
+                    categories = ['pass', 'false_defect', 'true_defect', 'fail']
+                    labels = ['PASS', '가성불량', '진성불량', 'FAIL']
+
+                for cat, label in zip(categories, labels):
+                    full_data_list = data_point.get(f'{cat}_data', [])
                     
-                    if not fields_to_display:
-                        st.info("표시할 필드가 정의되지 않았습니다.")
+                    if not full_data_list:
                         continue
 
-                    for item in full_data_list:
-                        formatted_fields = [f"{field}: {item.get(field, 'N/A')}" for field in fields_to_display]
-                        st.text(", ".join(formatted_fields))
-        st.markdown("---")
+                    count = len(full_data_list)
+                    unique_count = len(set(d['SNumber'] for d in full_data_list))
+
+                    expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                    
+                    with st.expander(expander_title, expanded=False):
+                        fields_to_display = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+                        
+                        if not fields_to_display:
+                            st.info("표시할 필드가 정의되지 않았습니다.")
+                            continue
+
+                        for item in full_data_list:
+                            formatted_fields = [f"{field}: {item.get(field, 'N/A')}" for field in fields_to_display]
+                            st.text(", ".join(formatted_fields))
+            st.markdown("---")
 
     # --- DB 원본 확인 및 상세 검색 기능 ---
     st.subheader("DB 원본 상세 검색")
