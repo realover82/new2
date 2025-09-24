@@ -324,9 +324,18 @@ def main():
                     try:
                         df = props['reader'](st.session_state.uploaded_files[key])
                         if df is not None:
+                             # === 이 부분이 수정되었습니다: 타임스탬프 변환 보장 ===
                             if props['timestamp_col'] in df.columns:
-                                df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], errors='coerce')
-    
+                                try:
+                                    # 밀리초 단위로 변환 시도
+                                    df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], unit='ms', errors='coerce')
+                                    # 밀리초가 아닐 경우를 대비해 초 단위로 변환 시도
+                                    if df[props['timestamp_col']].isnull().all():
+                                        df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], unit='s', errors='coerce')
+                                except Exception as e:
+                                    st.warning(f"타임스탬프 변환 중 오류가 발생했습니다: {e}")
+                            # ===============================================
+
                             with st.spinner("데이터 분석 및 저장 중..."):
                                 st.session_state.analysis_results[key] = df
                                 st.session_state.analysis_data[key] = props['analyzer'](df)
