@@ -156,7 +156,10 @@ def display_analysis_result(analysis_key, file_name, jig_col_name):
                 count = data_point.get(cat, 0)
                 if count > 0:
                     sns_list = data_point.get(f'{cat}_sns', [])
-                    with st.expander(f"{label} - {count}건", expanded=False):
+                    # '상세 내역'을 표시하는 루프 안쪽
+                    unique_count = data_point.get(f'{cat}_unique_count', 0)
+                    expander_title = f"{label} - {count}건 (고유 SN: {unique_count}건)"
+                    with st.expander(expander_title, expanded=False):
                         if sns_list:
                             st.text("\n".join(sns_list))
                         else:
@@ -245,7 +248,7 @@ def main():
                             with st.spinner("데이터 분석 및 저장 중..."):
                                 st.session_state.analysis_results[key] = df
                                 st.session_state.analysis_data[key] = props['analyzer'](df)
-                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d') # %H:%M:%S')
                             st.success("분석 완료! 결과가 저장되었습니다.")
                         else:
                             st.error(f"{key.upper()} 데이터 파일을 읽을 수 없습니다. 파일 형식을 확인해주세요.")
