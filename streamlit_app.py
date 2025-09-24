@@ -64,62 +64,26 @@ def display_analysis_result(analysis_key, file_name, props):
                     daily_totals[key] += data_point.get(key, 0)
         daily_aggregated_data[date_obj] = daily_totals
 
-    # --- 요약 (KPI 카드) ---
-    st.subheader(f"요약: {end_date.strftime('%Y-%m-%d')}")
+    # --- 요약 (날짜 범위 요약 테이블) ---
+    st.subheader("기간 요약")
     
-    # 선택된 날짜 범위와 PC에 맞춰 요약 정보 표시
-    filtered_df_raw = df_raw[(df_raw[props['jig_col']].isin(jigs_to_display)) & (df_raw[props['timestamp_col']].dt.date.isin(filtered_dates))]
-    
-    if not filtered_df_raw.empty:
-        total_tests = len(filtered_df_raw)
-        pass_tests = len(filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'O'])
-        fail_tests = len(filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'X'])
-        
-        fail_df_filtered = filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'X']
-        passed_sns = filtered_df_raw[filtered_df_raw['PassStatusNorm'] == 'O']['SNumber'].unique()
-
-        false_defect_df_filtered = fail_df_filtered[fail_df_filtered['SNumber'].isin(passed_sns)]
-        true_defect_df_filtered = fail_df_filtered[~fail_df_filtered['SNumber'].isin(passed_sns)]
-
-        false_defect_count = len(false_defect_df_filtered)
-        true_defect_count = len(true_defect_df_filtered)
-
-        # 델타 계산을 위해 바로 이전 날짜 데이터 집계
-        prev_date = start_date - timedelta(days=1)
-        prev_day_data = df_raw[(df_raw[props['jig_col']].isin(jigs_to_display)) & (df_raw[props['timestamp_col']].dt.date == prev_date)]
-        
-        prev_pass_sns = prev_day_data[prev_day_data['PassStatusNorm'] == 'O']['SNumber'].unique()
-        prev_fail_df = prev_day_data[prev_day_data['PassStatusNorm'] == 'X']
-        prev_false_defect_count = len(prev_fail_df[prev_fail_df['SNumber'].isin(prev_pass_sns)])
-        prev_true_defect_count = len(prev_fail_df[~prev_fail_df['SNumber'].isin(prev_pass_sns)])
-        
-        delta_false = false_defect_count - prev_false_defect_count
-        delta_true = true_defect_count - prev_true_defect_count
-
-        kpi_cols = st.columns(5)
-        kpi_cols[0].metric("총 테스트 수", f"{total_tests:,}")
-        kpi_cols[1].metric("PASS", f"{pass_tests:,}")
-        kpi_cols[2].metric("FAIL", f"{fail_tests:,}")
-        kpi_cols[3].metric("가성불량", f"{false_defect_count:,}", delta=f"{delta_false}" if delta_false is not None else None)
-        kpi_cols[4].metric("진성불량", f"{true_defect_count:,}", delta=f"{delta_true}" if delta_true is not None else None)
+    if filtered_dates:
+        # 일별 집계 데이터를 DataFrame으로 변환
+        summary_df_data = {
+            '날짜': [d.strftime('%m-%d') for d in filtered_dates],
+            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates],
+            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in filtered_dates],
+            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in filtered_dates],
+            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in filtered_dates],
+            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates]
+        }
+        summary_df = pd.DataFrame(summary_df_data).set_index('날짜')
+        # 행/열을 바꿔서 표시 (transpose)
+        st.dataframe(summary_df.transpose())
     else:
-        st.info("선택된 조건에 해당하는 데이터가 없습니다.")
+        st.info("선택된 조건에 해당하는 요약 데이터가 없습니다.")
 
     st.markdown("---")
-
-
-    # --- 일별 요약 테이블 ---
-    st.subheader("일별 요약 테이블")
-    report_data = {'지표': ['총 테스트 수', 'PASS', '가성불량', '진성불량', 'FAIL']}
-    for date_obj in filtered_dates:
-        daily_totals = daily_aggregated_data.get(date_obj, {})
-        date_str_col = date_obj.strftime('%y-%m-%d')
-        report_data[date_str_col] = [
-            daily_totals.get('total_test', 0), daily_totals.get('pass', 0), daily_totals.get('false_defect', 0),
-            daily_totals.get('true_defect', 0), daily_totals.get('fail', 0)
-        ]
-    report_df = pd.DataFrame(report_data).set_index('지표')
-    st.dataframe(report_df)
 
     # --- 일별 추이 그래프 ---
     st.subheader("일자별 불량 추이")
@@ -170,6 +134,8 @@ def display_analysis_result(analysis_key, file_name, props):
     # 2. 상세 내역 조회 버튼 추가
     if st.button("상세 내역 조회", key=f"show_details_btn_{analysis_key}"):
         st.session_state[f'show_details_{analysis_key}'] = True
+        # 버튼을 누르면 기본적으로 '불량만 보기' 모드로 설정
+        st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
 
     # 3. 버튼이 눌리면 상세 내역 표시
     if st.session_state[f'show_details_{analysis_key}']:
@@ -189,24 +155,10 @@ def display_analysis_result(analysis_key, file_name, props):
             if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
         
-        # '상세 보기' 날짜 선택 버튼
-        st.markdown("##### 상세 내역 날짜 선택")
-        detail_date_cols = st.columns(len(filtered_dates))
-        
-        for i, date_obj in enumerate(filtered_dates):
-            with detail_date_cols[i]:
-                if st.button(date_obj.strftime("%m-%d"), key=f"detail_date_{analysis_key}_{date_obj}"):
-                    st.session_state[f'detail_mode_{analysis_key}'] = date_obj.strftime("%Y-%m-%d")
-
         # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
         
-        # 모든 날짜를 보여줄지, 특정 날짜만 보여줄지 결정합니다.
-        dates_to_display = filtered_dates
-        if current_mode not in ['all', 'defects', 'pass']:
-            dates_to_display = [datetime.strptime(current_mode, "%Y-%m-%d").date()]
-
-        for date_obj in dates_to_display:
+        for date_obj in filtered_dates:
             st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
             
             for jig in jigs_to_display:
