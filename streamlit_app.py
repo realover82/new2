@@ -134,7 +134,7 @@ def display_analysis_result(analysis_key, file_name, props):
 
         # Altair 차트 생성
         base = alt.Chart(chart_df_melted).encode(
-            x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%Y-%m-%d %H:%M')),
+            x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%H:%M')),
             y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수'))
         ).properties(
             title='시간대별 불량 건수 추이'
@@ -324,6 +324,9 @@ def main():
                     try:
                         df = props['reader'](st.session_state.uploaded_files[key])
                         if df is not None:
+                            if props['timestamp_col'] in df.columns:
+                                df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], errors='coerce')
+    
                             with st.spinner("데이터 분석 및 저장 중..."):
                                 st.session_state.analysis_results[key] = df
                                 st.session_state.analysis_data[key] = props['analyzer'](df)
