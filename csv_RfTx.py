@@ -54,7 +54,35 @@ def analyze_RfTx_data(df):
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
 
-    df['RfTxStamp'] = pd.to_datetime(df['RfTxStamp'], unit='ms', errors='coerce')
+    # === 이 부분이 수정되었습니다: 타임스탬프 변환 로직 개선 ===
+    original_col_name = 'RfTxStamp'
+    if original_col_name in df.columns:
+        converted_series = None
+        
+        # 1. 밀리초(ms) 단위로 변환 시도
+        try:
+            converted_series = pd.to_datetime(df[original_col_name], unit='ms', errors='coerce')
+        except Exception:
+            pass
+        
+        # 2. 초(s) 단위로 변환 시도
+        if converted_series is None or converted_series.isnull().all():
+            try:
+                converted_series = pd.to_datetime(df[original_col_name], unit='s', errors='coerce')
+            except Exception:
+                pass
+
+        # 3. 변환된 시리즈로 컬럼 업데이트
+        if converted_series is not None and not converted_series.isnull().all():
+            df[original_col_name] = converted_series
+        else:
+            st.warning(f"타임스탬프 변환에 실패했습니다. {original_col_name} 컬럼의 형식을 확인해주세요.")
+            return None, None # 변환 실패 시 함수 종료
+    else:
+        st.error(f"'{original_col_name}' 컬럼이 데이터에 없습니다.")
+        return None, None # 컬럼이 없을 시 함수 종료
+    # =======================================================
+
     df['PassStatusNorm'] = df['RfTxPass'].fillna('').astype(str).str.strip().str.upper()
 
     summary_data = {}
@@ -62,7 +90,6 @@ def analyze_RfTx_data(df):
     if 'RfTxPC' not in df.columns:
         df['RfTxPC'] = 'DefaultJig'
 
-    # 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
     jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('RfTxPC')['SNumber'].unique().apply(set).to_dict()
 
     for jig, group in df.groupby('RfTxPC'):
@@ -78,17 +105,13 @@ def analyze_RfTx_data(df):
 
             current_jig_passed_sns = jig_pass_history.get(jig, set())
             
-            # 각 카테고리별 데이터프레임 필터링
             pass_df = day_group[day_group['PassStatusNorm'] == 'O']
             fail_df = day_group[day_group['PassStatusNorm'] == 'X']
             
-            # 가성불량: 현재 Jig에서 FAIL이면서, 동일한 Jig에서 PASS를 기록했던 SNumber
             false_defect_df = fail_df[fail_df['SNumber'].isin(current_jig_passed_sns)]
             
-            # 진성불량: 현재 Jig에서 FAIL이지만, 동일한 Jig에서 PASS를 기록한 적이 없는 SNumber
             true_defect_df = fail_df[~fail_df['SNumber'].isin(current_jig_passed_sns)]
             
-            # 각 항목별 건수 (테스트 횟수)
             pass_count = len(pass_df)
             false_defect_count = len(false_defect_df)
             true_defect_count = len(true_defect_df)
@@ -99,7 +122,6 @@ def analyze_RfTx_data(df):
             if jig not in summary_data:
                 summary_data[jig] = {}
             
-            # SNumber 리스트 대신, DataFrame의 모든 행을 딕셔너리 리스트로 변환하여 저장
             summary_data[jig][date_iso] = {
                 'total_test': total_test,
                 'pass': pass_count,
@@ -108,7 +130,6 @@ def analyze_RfTx_data(df):
                 'fail': fail_count,
                 'pass_rate': f"{rate:.1f}%",
                 
-                # SNumber 목록 대신, DataFrame의 모든 데이터를 저장합니다.
                 'pass_data': pass_df.to_dict('records'),
                 'false_defect_data': false_defect_df.to_dict('records'),
                 'true_defect_data': true_defect_df.to_dict('records'),
