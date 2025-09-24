@@ -140,7 +140,41 @@ def display_analysis_result(analysis_key, file_name, props):
 
     # --- 상세 내역 (날짜별 펼치기) ---
     st.subheader("상세 내역 (일별)")
-    for date_obj in filtered_dates:
+    
+    # 세션 상태에 상세 보기 모드를 저장할 변수를 초기화합니다.
+    if f'detail_mode_{analysis_key}' not in st.session_state:
+        st.session_state[f'detail_mode_{analysis_key}'] = 'all'
+
+    # 상세 보기 모드 버튼을 생성합니다.
+    detail_col1, detail_col2, detail_col3 = st.columns(3)
+    with detail_col1:
+        if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
+            st.session_state[f'detail_mode_{analysis_key}'] = 'all'
+    with detail_col2:
+        if st.button("불량만 보기", key=f"detail_defects_{analysis_key}"):
+            st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
+    with detail_col3:
+        if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
+            st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
+    
+    # '상세 보기' 날짜 선택 버튼
+    st.markdown("##### 상세 내역 날짜 선택")
+    detail_date_cols = st.columns(len(filtered_dates))
+    
+    for i, date_obj in enumerate(filtered_dates):
+        with detail_date_cols[i]:
+            if st.button(date_obj.strftime("%m-%d"), key=f"detail_date_{analysis_key}_{date_obj}"):
+                st.session_state[f'detail_mode_{analysis_key}'] = date_obj.strftime("%Y-%m-%d")
+
+    # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
+    current_mode = st.session_state[f'detail_mode_{analysis_key}']
+    
+    # 모든 날짜를 보여줄지, 특정 날짜만 보여줄지 결정합니다.
+    dates_to_display = filtered_dates
+    if current_mode not in ['all', 'defects', 'pass']:
+        dates_to_display = [datetime.strptime(current_mode, "%Y-%m-%d").date()]
+
+    for date_obj in dates_to_display:
         st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
         
         for jig in jigs_to_display:
@@ -149,8 +183,17 @@ def display_analysis_result(analysis_key, file_name, props):
                 continue
 
             st.markdown(f"**PC(Jig): {jig}**")
-            categories = ['pass', 'false_defect', 'true_defect', 'fail']
-            labels = ['PASS', '가성불량', '진성불량', 'FAIL']
+            
+            # 현재 모드에 따라 표시할 카테고리 필터링
+            if current_mode == 'defects':
+                categories = ['false_defect', 'true_defect']
+                labels = ['가성불량', '진성불량']
+            elif current_mode == 'pass':
+                categories = ['pass']
+                labels = ['PASS']
+            else: # 'all' 또는 특정 날짜 선택
+                categories = ['pass', 'false_defect', 'true_defect', 'fail']
+                labels = ['PASS', '가성불량', '진성불량', 'FAIL']
 
             for cat, label in zip(categories, labels):
                 full_data_list = data_point.get(f'{cat}_data', [])
@@ -173,9 +216,7 @@ def display_analysis_result(analysis_key, file_name, props):
                     for item in full_data_list:
                         formatted_fields = [f"{field}: {item.get(field, 'N/A')}" for field in fields_to_display]
                         st.text(", ".join(formatted_fields))
-
-    st.markdown("---")
-
+        st.markdown("---")
 
     # --- DB 원본 확인 및 상세 검색 기능 ---
     st.subheader("DB 원본 상세 검색")
