@@ -134,7 +134,7 @@ def display_analysis_result(analysis_key, file_name, props):
 
         # Altair 차트 생성
         base = alt.Chart(chart_df_melted).encode(
-            x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%yymmdd %H:%M')),
+            x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%Y-%m-%d %H:%M')),
             y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수'))
         ).properties(
             title='시간대별 불량 건수 추이'
