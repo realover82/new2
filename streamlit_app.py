@@ -10,8 +10,6 @@ from csv_RfTx import read_csv_with_dynamic_header_for_RfTx, analyze_RfTx_data
 from csv_Semi import read_csv_with_dynamic_header_for_Semi, analyze_Semi_data
 from csv_Batadc import read_csv_with_dynamic_header_for_Batadc, analyze_Batadc_data
 
-# streamlit_app.py 파일의 display_analysis_result 함수 전체를 아래 코드로 교체하세요.
-
 def display_analysis_result(analysis_key, file_name, props):
     """ session_state에 저장된 분석 결과를 Streamlit에 표시하는 함수 """
     if st.session_state.analysis_results[analysis_key] is None:
@@ -155,7 +153,6 @@ def display_analysis_result(analysis_key, file_name, props):
             labels = ['PASS', '가성불량', '진성불량', 'FAIL']
 
             for cat, label in zip(categories, labels):
-                # 변경된 analyze 함수에 맞춰 'data'를 가져옵니다.
                 full_data_list = data_point.get(f'{cat}_data', [])
                 
                 if not full_data_list:
@@ -223,7 +220,7 @@ def display_analysis_result(analysis_key, file_name, props):
 
 
 # ==============================
-# 메인 실행 함수 (기존과 동일)
+# 메인 실행 함수
 # ==============================
 def main():
     st.set_page_config(layout="wide")
@@ -238,8 +235,10 @@ def main():
         st.session_state.analysis_data = {k: None for k in ['Pcb', 'Fw', 'RfTx', 'Semi', 'Batadc']}
     if 'analysis_time' not in st.session_state:
         st.session_state.analysis_time = {k: None for k in ['Pcb', 'Fw', 'RfTx', 'Semi', 'Batadc']}
+    if 'field_mapping' not in st.session_state:
+        st.session_state.field_mapping = {}
 
-    tabs = st.tabs(["파일 Pcb 분석", "파일 Fw 분석", "파일 RfTx 분석", "파일 Semi 분석", "파일 Batadc"])
+    tabs = st.tabs(["파일 Pcb 분석", "파일 Fw 분석", "파일 RfTx 분석", "파일 Semi 분석", "파일 Batadc 분석"])
     tab_map = {
         'Pcb': {'tab': tabs[0], 'reader': read_csv_with_dynamic_header, 'analyzer': analyze_data, 'jig_col': 'PcbMaxIrPwr', 'timestamp_col': 'PcbStamp'},
         'Fw': {'tab': tabs[1], 'reader': read_csv_with_dynamic_header_for_Fw, 'analyzer': analyze_Fw_data, 'jig_col': 'FwPC', 'timestamp_col': 'FwStamp'},
@@ -247,6 +246,7 @@ def main():
         'Semi': {'tab': tabs[3], 'reader': read_csv_with_dynamic_header_for_Semi, 'analyzer': analyze_Semi_data, 'jig_col': 'SemiAssyMaxSolarVolt', 'timestamp_col': 'SemiAssyStamp'},
         'Batadc': {'tab': tabs[4], 'reader': read_csv_with_dynamic_header_for_Batadc, 'analyzer': analyze_Batadc_data, 'jig_col': 'BatadcPC', 'timestamp_col': 'BatadcStamp'}
     }
+
     for key, props in tab_map.items():
         with props['tab']:
             st.header(f"{key.upper()} 데이터 분석")
@@ -260,7 +260,7 @@ def main():
                             with st.spinner("데이터 분석 및 저장 중..."):
                                 st.session_state.analysis_results[key] = df
                                 st.session_state.analysis_data[key] = props['analyzer'](df)
-                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d') # %H:%M:%S')
+                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
                             st.success("분석 완료! 결과가 저장되었습니다.")
                         else:
                             st.error(f"{key.upper()} 데이터 파일을 읽을 수 없습니다. 파일 형식을 확인해주세요.")
@@ -268,7 +268,8 @@ def main():
                         st.error(f"분석 중 오류 발생: {e}")
 
                 if st.session_state.analysis_results[key] is not None:
-                    display_analysis_result(key, st.session_state.uploaded_files[key].name, props['jig_col'])
+                    # 함수 호출 시 인수를 정확히 전달합니다.
+                    display_analysis_result(key, st.session_state.uploaded_files[key].name, props)
 
 if __name__ == "__main__":
     main()
