@@ -57,23 +57,19 @@ def analyze_RfTx_data(df):
     # === 이 부분이 수정되었습니다: 타임스탬프 변환 로직 개선 ===
     original_col_name = 'RfTxStamp'
     if original_col_name in df.columns:
-        converted_series = None
+        # Step 1: 컬럼의 타입을 먼저 숫자로 변환합니다. (문자가 섞여있을 경우 대비)
+        numeric_series = pd.to_numeric(df[original_col_name], errors='coerce')
+        df[original_col_name] = numeric_series
         
-        # 1. 밀리초(ms) 단위로 변환 시도
-        try:
-            converted_series = pd.to_datetime(df[original_col_name], unit='ms', errors='coerce')
-        except Exception:
-            pass
-        
-        # 2. 초(s) 단위로 변환 시도
-        if converted_series is None or converted_series.isnull().all():
-            try:
-                converted_series = pd.to_datetime(df[original_col_name], unit='s', errors='coerce')
-            except Exception:
-                pass
+        # Step 2: 숫자로 변환된 데이터를 바탕으로 타임스탬프 변환을 시도합니다.
+        converted_series = pd.to_datetime(df[original_col_name], unit='ms', errors='coerce')
 
-        # 3. 변환된 시리즈로 컬럼 업데이트
-        if converted_series is not None and not converted_series.isnull().all():
+        # 만약 밀리초 단위 변환이 실패하면, 초 단위로 변환 시도
+        if converted_series.isnull().all():
+            converted_series = pd.to_datetime(df[original_col_name], unit='s', errors='coerce')
+        
+        # Step 3: 변환된 시리즈로 컬럼을 업데이트하고 실패 여부를 확인합니다.
+        if not converted_series.isnull().all():
             df[original_col_name] = converted_series
         else:
             st.warning(f"타임스탬프 변환에 실패했습니다. {original_col_name} 컬럼의 형식을 확인해주세요.")
@@ -82,9 +78,8 @@ def analyze_RfTx_data(df):
         st.error(f"'{original_col_name}' 컬럼이 데이터에 없습니다.")
         return None, None # 컬럼이 없을 시 함수 종료
     # =======================================================
-
+    
     df['PassStatusNorm'] = df['RfTxPass'].fillna('').astype(str).str.strip().str.upper()
-
     summary_data = {}
     
     if 'RfTxPC' not in df.columns:
