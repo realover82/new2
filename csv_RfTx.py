@@ -1,7 +1,3 @@
-#
-# csv_RfTx.py
-#
-
 import pandas as pd
 import numpy as np
 import io
@@ -29,12 +25,10 @@ def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
                 file_content.seek(0)
                 df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
                 keywords = ['SNumber', 'RfTxStamp', 'RfTxPC', 'RfTxPass']
-                
                 # st.session_state에 직접 키워드 리스트 저장
                 if 'field_mapping' not in st.session_state:
                     st.session_state.field_mapping = {}
                 st.session_state.field_mapping['RfTx'] = keywords
-                
                 header_row = None
                 for i, row in df_temp.iterrows():
                     row_values = [str(x).strip() for x in row.values if pd.notna(x)]
@@ -45,11 +39,6 @@ def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
                 if header_row is not None:
                     file_content.seek(0)
                     df = pd.read_csv(file_content, header=header_row, encoding=encoding)
-                    
-                    # 데이터 로드 직후 문자열을 정리합니다.
-                    for col in df.columns:
-                        df[col] = df[col].apply(clean_string_format)
-                    
                     return df
             except Exception:
                 continue
@@ -57,39 +46,43 @@ def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
     except Exception as e:
         return None
 
+# rftx.py 파일의 analyze_RfTx_data 함수 전체를 아래 코드로 교체하세요.
+
 def analyze_RfTx_data(df):
     """RfTx 데이터의 분석 로직을 담고 있는 함수"""
-    if df is None:
-        return None, None
-        
-    # --- 타임스탬프 변환 로직 통합 및 강화 ---
+    # 데이터 전처리
+    for col in df.columns:
+        df[col] = df[col].apply(clean_string_format)
+
+    # === 이 부분이 수정되었습니다: 타임스탬프 변환 로직 개선 ===
     original_col_name = 'RfTxStamp'
     if original_col_name in df.columns:
+        converted_series = None
+        
+        # 1. 밀리초(ms) 단위로 변환 시도
         try:
-            # Step 1: 컬럼의 타입을 먼저 숫자로 변환합니다. (문자열이 섞여있을 경우 대비)
-            numeric_series = pd.to_numeric(df[original_col_name], errors='coerce')
-            
-            # Step 2: 숫자로 변환된 데이터를 바탕으로 타임스탬프 변환을 시도합니다.
-            converted_series = pd.to_datetime(numeric_series, unit='ms', errors='coerce')
+            converted_series = pd.to_datetime(df[original_col_name], unit='ms', errors='coerce')
+        except Exception:
+            pass
+        
+        # 2. 초(s) 단위로 변환 시도
+        if converted_series is None or converted_series.isnull().all():
+            try:
+                converted_series = pd.to_datetime(df[original_col_name], unit='s', errors='coerce')
+            except Exception:
+                pass
 
-            # 만약 밀리초 단위 변환이 실패하면, 초 단위로 변환 시도
-            if converted_series.isnull().all():
-                converted_series = pd.to_datetime(numeric_series, unit='s', errors='coerce')
-            
-            # Step 3: 변환된 시리즈로 컬럼을 업데이트하고 실패 여부를 확인합니다.
-            if not converted_series.isnull().all():
-                df[original_col_name] = converted_series
-            else:
-                st.warning(f"타임스탬프 변환에 실패했습니다. {original_col_name} 컬럼의 형식을 확인해주세요.")
-                return None, None
-        except Exception as e:
-            st.error(f"타임스탬프 변환 중 예상치 못한 오류 발생: {e}")
-            return None, None
+        # 3. 변환된 시리즈로 컬럼 업데이트
+        if converted_series is not None and not converted_series.isnull().all():
+            df[original_col_name] = converted_series
+        else:
+            st.warning(f"타임스탬프 변환에 실패했습니다. {original_col_name} 컬럼의 형식을 확인해주세요.")
+            return None, None # 변환 실패 시 함수 종료
     else:
         st.error(f"'{original_col_name}' 컬럼이 데이터에 없습니다.")
-        return None, None
-    # --- 타임스탬프 변환 로직 끝 ---
-    
+        return None, None # 컬럼이 없을 시 함수 종료
+    # =======================================================
+
     df['PassStatusNorm'] = df['RfTxPass'].fillna('').astype(str).str.strip().str.upper()
 
     summary_data = {}
@@ -97,7 +90,6 @@ def analyze_RfTx_data(df):
     if 'RfTxPC' not in df.columns:
         df['RfTxPC'] = 'DefaultJig'
 
-    # 모든 Jig에 대해 PASS 기록이 있는 SNumber를 미리 계산합니다.
     jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('RfTxPC')['SNumber'].unique().apply(set).to_dict()
 
     for jig, group in df.groupby('RfTxPC'):
