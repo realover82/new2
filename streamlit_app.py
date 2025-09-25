@@ -16,11 +16,31 @@ def display_analysis_result(analysis_key, file_name, props):
         st.error("데이터 로드에 실패했습니다. 파일 형식을 확인해주세요.")
         return
 
+    # === 수정된 부분 1: analysis_data 유효성 검사 추가 ===
+    if st.session_state.analysis_data[analysis_key] is None:
+        st.error("데이터 분석에 실패했습니다. 분석 함수를 확인해주세요.")
+        return
+        
     summary_data, all_dates = st.session_state.analysis_data[analysis_key]
     df_raw = st.session_state.analysis_results[analysis_key]
-
+    
+    # 두 번째 수정: all_dates가 여전히 None일 경우를 처리
+    if all_dates is None:
+        st.error("데이터 분석에 실패했습니다. 날짜 관련 컬럼 형식을 확인해주세요.")
+        return
+    # =======================================================
+    
     st.markdown(f"### '{file_name}' 분석 리포트")
 
+    # === 수정된 부분 2: 필수 컬럼 존재 여부 확인 추가 ===
+    required_columns = [props['jig_col'], props['timestamp_col']]
+    missing_columns = [col for col in required_columns if col not in df_raw.columns]
+    
+    if missing_columns:
+        st.error(f"데이터에 필수 컬럼이 없습니다: {', '.join(missing_columns)}. 파일을 다시 확인해주세요.")
+        return
+    # =======================================================
+    
     # --- 기본 필터링 (Jig, 날짜 범위) ---
     st.subheader("기본 필터링")
     filter_col1, filter_col2, filter_col3 = st.columns(3)
@@ -323,31 +343,41 @@ def main():
                 if st.button(f"{key.upper()} 분석 실행", key=f"analyze_{key}"):
                     try:
                         df = props['reader'](st.session_state.uploaded_files[key])
-                        if df is not None:
-                             # === 이 부분이 수정되었습니다: 타임스탬프 변환 보장 ===
-                            if props['timestamp_col'] in df.columns:
-                                try:
-                                    # 밀리초 단위로 변환 시도
-                                    df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], unit='ms', errors='coerce')
-                                    # 밀리초가 아닐 경우를 대비해 초 단위로 변환 시도
-                                    if df[props['timestamp_col']].isnull().all():
-                                        df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], unit='s', errors='coerce')
-                                except Exception as e:
-                                    st.warning(f"타임스탬프 변환 중 오류가 발생했습니다: {e}")
-                            # ===============================================
+                        
+                        if df is None or df.empty:
+                            st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
+                            st.session_state.analysis_results[key] = None
+                            continue
+                        
+                        # 필수 컬럼 존재 여부 확인
+                        if props['jig_col'] not in df.columns or props['timestamp_col'] not in df.columns:
+                            st.error(f"데이터에 필수 컬럼 ('{props['jig_col']}', '{props['timestamp_col']}')이 없습니다. 파일을 다시 확인해주세요.")
+                            st.session_state.analysis_results[key] = None
+                            continue
+                            
+                        # 타임스탬프 변환 로직
+                        try:
+                            df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], errors='coerce')
+                            if df[props['timestamp_col']].isnull().all():
+                                st.warning(f"타임스탬프 변환에 실패했습니다. {props['timestamp_col']} 컬럼의 형식을 확인해주세요.")
+                                st.session_state.analysis_results[key] = None
+                                continue
+                        except Exception as e:
+                            st.warning(f"타임스탬프 변환 중 오류가 발생했습니다: {e}")
+                            st.session_state.analysis_results[key] = None
+                            continue
 
-                            with st.spinner("데이터 분석 및 저장 중..."):
-                                st.session_state.analysis_results[key] = df
-                                st.session_state.analysis_data[key] = props['analyzer'](df)
-                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
-                            st.success("분석 완료! 결과가 저장되었습니다.")
-                        else:
-                            st.error(f"{key.upper()} 데이터 파일을 읽을 수 없습니다. 파일 형식을 확인해주세요.")
+                        with st.spinner("데이터 분석 및 저장 중..."):
+                            st.session_state.analysis_results[key] = df.copy()
+                            st.session_state.analysis_data[key] = props['analyzer'](df)
+                            st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
+                        st.success("분석 완료! 결과가 저장되었습니다.")
+                        
                     except Exception as e:
                         st.error(f"분석 중 오류 발생: {e}")
+                        st.session_state.analysis_results[key] = None
 
                 if st.session_state.analysis_results[key] is not None:
-                    # 함수 호출 시 인수를 정확히 전달합니다.
                     display_analysis_result(key, st.session_state.uploaded_files[key].name, props)
 
 if __name__ == "__main__":
