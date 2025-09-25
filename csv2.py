@@ -62,7 +62,14 @@ def analyze_data(df):
     # 데이터 전처리
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
-
+        # === 수정된 부분: PassStatusNorm 컬럼을 최우선으로 생성 ===
+    if 'PcbPass' in df.columns:
+        df['PassStatusNorm'] = df['PcbPass'].fillna('').astype(str).str.strip().str.upper()
+    else:
+        st.error("'PcbPass' 컬럼이 없어 분석을 진행할 수 없습니다.")
+        return None, None
+    # ========================================================
+    
     # 타임스탬프 컬럼 이름 찾기
     timestamp_col = 'PcbStartTime'
     try:
@@ -110,6 +117,10 @@ def analyze_data(df):
         return None, None
     # ======================================
     
+    # 최종 결과 확인
+    if df[timestamp_col_actual].isnull().all():
+        st.warning(f"타임스탬프 변환에 실패했습니다. '{timestamp_col_actual}' 컬럼의 형식을 확인해주세요.")
+        return None, None
     df['PassStatusNorm'] = df['PcbPass'].fillna('').astype(str).str.strip().str.upper()
 
     summary_data = {}
