@@ -74,14 +74,21 @@ def analyze_data(df):
     # === 수정된 타임스탬프 변환 로직 ===
     converted_series = None
     
-    # 1. 밀리초(ms) 단위 변환 시도 (문자열인 경우 숫자로 변환 후 시도)
+    # 1. YYYYMMDDHHmmss 형식 변환 시도
     try:
-        series_to_convert = pd.to_numeric(df[timestamp_col_actual], errors='coerce')
-        converted_series = pd.to_datetime(series_to_convert, unit='ms', errors='coerce')
+        converted_series = pd.to_datetime(df[timestamp_col_actual], format='%Y%m%d%H%M%S', errors='coerce')
     except Exception:
         pass
+
+    # 2. 밀리초(ms) 단위 변환 시도 (문자열인 경우 숫자로 변환 후 시도)
+    if converted_series is None or converted_series.isnull().all():
+        try:
+            series_to_convert = pd.to_numeric(df[timestamp_col_actual], errors='coerce')
+            converted_series = pd.to_datetime(series_to_convert, unit='ms', errors='coerce')
+        except Exception:
+            pass
     
-    # 2. 초(s) 단위 변환 시도
+    # 3. 초(s) 단위 변환 시도
     if converted_series is None or converted_series.isnull().all():
         try:
             series_to_convert = pd.to_numeric(df[timestamp_col_actual], errors='coerce')
@@ -89,7 +96,7 @@ def analyze_data(df):
         except Exception:
             pass
             
-    # 3. 다양한 문자열 형식 변환 시도
+    # 4. 다양한 문자열 형식 변환 시도
     if converted_series is None or converted_series.isnull().all():
         try:
             converted_series = pd.to_datetime(df[timestamp_col_actual], errors='coerce')
