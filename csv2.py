@@ -62,6 +62,52 @@ def analyze_data(df):
     # 데이터 전처리
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
+        
+    # === 수정된 타임스탬프 변환 로직 ===
+    original_col_name = 'PcbStartTime'
+    if original_col_name in df.columns:
+        converted_series = None
+        
+        # 1. 밀리초(ms) 단위 변환 시도 (문자열인 경우 숫자로 변환 후 시도)
+        try:
+            # 문자열인 경우 숫자로 변환
+            series_to_convert = pd.to_numeric(df[original_col_name], errors='coerce')
+            converted_series = pd.to_datetime(series_to_convert, unit='ms', errors='coerce')
+        except Exception:
+            pass
+        
+        # 2. 초(s) 단위 변환 시도
+        if converted_series is None or converted_series.isnull().all():
+            try:
+                series_to_convert = pd.to_numeric(df[original_col_name], errors='coerce')
+                converted_series = pd.to_datetime(series_to_convert, unit='s', errors='coerce')
+            except Exception:
+                pass
+
+        # 3. YYYY-MM-DD HH:MM:SS 형식 변환 시도
+        if converted_series is None or converted_series.isnull().all():
+            try:
+                converted_series = pd.to_datetime(df[original_col_name], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+            except Exception:
+                pass
+                
+        # 4. YYYY/MM/DD HH:MM:SS 형식 변환 시도
+        if converted_series is None or converted_series.isnull().all():
+            try:
+                converted_series = pd.to_datetime(df[original_col_name], format='%Y/%m/%d %H:%M:%S', errors='coerce')
+            except Exception:
+                pass
+        
+        # 5. 변환된 시리즈로 컬럼 업데이트
+        if converted_series is not None and not converted_series.isnull().all():
+            df[original_col_name] = converted_series
+        else:
+            st.warning(f"타임스탬프 변환에 실패했습니다. {original_col_name} 컬럼의 형식을 확인해주세요.")
+            return None, None
+    else:
+        st.error(f"'{original_col_name}' 컬럼이 데이터에 없습니다.")
+        return None, None
+    # ======================================    
 
     # === 타임스탬프 컬럼 이름 정규화 ===
     # 컬럼 이름을 찾아 표준 이름으로 변경
