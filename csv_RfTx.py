@@ -1,3 +1,53 @@
+import pandas as pd
+import numpy as np
+import io
+from datetime import datetime
+import warnings
+import streamlit as st
+
+warnings.filterwarnings('ignore')
+
+# '="...' 형식의 문자열을 정리하는 함수
+def clean_string_format(value):
+    if isinstance(value, str) and value.startswith('="') and value.endswith('"'):
+        return value[2:-1]
+    return value
+
+def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
+    """RfTx 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수"""
+    try:
+        file_content = io.BytesIO(uploaded_file.getvalue())
+        # 다양한 인코딩 시도
+        encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
+        df = None
+        for encoding in encodings:
+            try:
+                file_content.seek(0)
+                df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
+                keywords = ['SNumber', 'RfTxStamp', 'RfTxPC', 'RfTxPass']
+                # st.session_state에 직접 키워드 리스트 저장
+                if 'field_mapping' not in st.session_state:
+                    st.session_state.field_mapping = {}
+                st.session_state.field_mapping['RfTx'] = keywords
+                header_row = None
+                for i, row in df_temp.iterrows():
+                    row_values = [str(x).strip() for x in row.values if pd.notna(x)]
+                    if all(keyword in row_values for keyword in keywords):
+                        header_row = i
+                        break
+                
+                if header_row is not None:
+                    file_content.seek(0)
+                    df = pd.read_csv(file_content, header=header_row, encoding=encoding)
+                    return df
+            except Exception:
+                continue
+        return None
+    except Exception as e:
+        return None
+
+# rftx.py 파일의 analyze_RfTx_data 함수 전체를 아래 코드로 교체하세요.
+
 def analyze_RfTx_data(df):
     """RfTx 데이터의 분석 로직을 담고 있는 함수"""
     # 데이터 전처리
