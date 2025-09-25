@@ -18,30 +18,43 @@ def read_csv_with_dynamic_header(uploaded_file):
     """PCB 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수"""
     try:
         file_content = io.BytesIO(uploaded_file.getvalue())
-        # 다양한 인코딩 시도
         encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
         df = None
         for encoding in encodings:
             try:
                 file_content.seek(0)
                 df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
-                keywords = ['SNumber', 'PcbStartTime', 'PcbMaxIrPwr', 'PcbPass', 'PcbSleepCurr']
+                
+                # 필수 키워드 목록
+                keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
-                    row_values = [str(x).strip() for x in row.values if pd.notna(x)]
-                    if all(keyword in row_values for keyword in keywords):
+                    # 모든 값을 소문자로 변환하고 양쪽 공백 제거
+                    row_values_lower = [str(x).strip().lower() for x in row.values if pd.notna(x)]
+                    
+                    # 모든 필수 키워드가 헤더에 포함되어 있는지 확인
+                    if all(keyword in row_values_lower for keyword in keywords):
                         header_row = i
                         break
                 
                 if header_row is not None:
                     file_content.seek(0)
                     df = pd.read_csv(file_content, header=header_row, encoding=encoding)
+                    
+                    # 실제 로드된 컬럼 이름을 사용자에게 표시하여 디버깅을 돕습니다.
+                    st.sidebar.markdown("---")
+                    st.sidebar.subheader("찾은 컬럼 목록")
+                    st.sidebar.write(df.columns.tolist())
+                    
                     return df
-            except Exception:
+            except Exception as e:
+                # 오류가 발생해도 다음 인코딩 시도
                 continue
+        st.error("파일 헤더를 찾을 수 없습니다. 필수 컬럼이 누락되었거나 형식이 다릅니다.")
         return None
     except Exception as e:
+        st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
         return None
 
 def analyze_data(df):
@@ -50,24 +63,62 @@ def analyze_data(df):
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
 
+    # === 타임스탬프 컬럼 이름 정규화 ===
+    # 컬럼 이름을 찾아 표준 이름으로 변경
+    df_columns_lower = [col.strip().lower() for col in df.columns]
+    
+    # 'PcbStartTime' 컬럼이 여러 이름으로 존재할 수 있으므로, 정확한 컬럼 이름 찾기
+    try:
+        timestamp_col = next(col for col in df.columns if col.strip().lower() == 'pcbstarttime')
+    except StopIteration:
+        # 이 예외는 streamlit_app.py에서 처리될 것이므로 여기서는 None을 반환합니다.
+        return None, None
+    
     # 타임스탬프 변환 로직
-    df['PcbStartTime'] = pd.to_datetime(df['PcbStartTime'], errors='coerce')
+    converted_series = None
+    
+    try:
+        # 밀리초(ms) 단위 변환 시도
+        converted_series = pd.to_datetime(df[timestamp_col], unit='ms', errors='coerce')
+        # 초(s) 단위 변환 시도
+        if converted_series.isnull().all():
+            converted_series = pd.to_datetime(df[timestamp_col], unit='s', errors='coerce')
+    except Exception:
+        pass
+    
+    if converted_series is None or converted_series.isnull().all():
+        try:
+            # 다양한 문자열 형식 시도
+            converted_series = pd.to_datetime(df[timestamp_col], errors='coerce')
+        except Exception:
+            pass
+
+    if converted_series is not None and not converted_series.isnull().all():
+        df[timestamp_col] = converted_series
+    else:
+        st.warning(f"타임스탬프 변환에 실패했습니다. {timestamp_col} 컬럼의 형식을 확인해주세요.")
+        return None, None
+    
     df['PassStatusNorm'] = df['PcbPass'].fillna('').astype(str).str.strip().str.upper()
 
     summary_data = {}
     
-    if 'PcbMaxIrPwr' not in df.columns:
+    # 'PcbMaxIrPwr' 컬럼 이름 정규화
+    try:
+        jig_col = next(col for col in df.columns if col.strip().lower() == 'pcbmaxirpwr')
+    except StopIteration:
         df['PcbMaxIrPwr'] = 'DefaultJig'
+        jig_col = 'PcbMaxIrPwr'
 
     # 전체 데이터에서 한번만 PASS한 이력이 있는 SNumber들을 미리 계산
-    jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('PcbMaxIrPwr')['SNumber'].unique().apply(set).to_dict()
+    jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby(jig_col)['SNumber'].unique().apply(set).to_dict()
 
-    for jig, group in df.groupby('PcbMaxIrPwr'):
-        group = group.dropna(subset=['PcbStartTime'])
+    for jig, group in df.groupby(jig_col):
+        group = group.dropna(subset=[timestamp_col])
         if group.empty:
             continue
         
-        for d, day_group in group.groupby(group['PcbStartTime'].dt.date):
+        for d, day_group in group.groupby(group[timestamp_col].dt.date):
             if pd.isna(d):
                 continue
             
@@ -112,5 +163,5 @@ def analyze_data(df):
                 'fail_unique_count': len(fail_df['SNumber'].unique())
             }
     
-    all_dates = sorted(list(df['PcbStartTime'].dt.date.dropna().unique()))
+    all_dates = sorted(list(df[timestamp_col].dt.date.dropna().unique()))
     return summary_data, all_dates
