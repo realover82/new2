@@ -24,7 +24,7 @@ def read_csv_with_dynamic_header_for_RfTx(uploaded_file):
             try:
                 file_content.seek(0)
                 df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
-                keywords = ['SNumber', 'RfTxStamp', 'RfTxPC', 'RfTxPass', 'RfTxPower' ]
+                keywords = ['SNumber', 'RfTxStamp', 'RfTxPC', 'RfTxPass']
                 # st.session_state에 직접 키워드 리스트 저장
                 if 'field_mapping' not in st.session_state:
                     st.session_state.field_mapping = {}

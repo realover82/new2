@@ -34,7 +34,7 @@ def read_csv_with_dynamic_header_for_Semi(uploaded_file):
                 file_content = io.BytesIO(uploaded_file.getvalue())
                 df_temp = pd.read_csv(file_content, header=None, nrows=20, encoding=encoding, skipinitialspace=True)
                 
-                keywords = ['SNumber', 'SemiAssyStartTime', 'SemiAssyPass'] # 필수 키워드만 확인
+                keywords = ['SNumber', 'SemiAssyStartTime', 'SemiAssyPass', 'SemiAssySolarVolt']  # 필수 키워드만 확인
                 
                 header_row = None
                 for i, row in df_temp.iterrows():

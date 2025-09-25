@@ -1,7 +1,7 @@
 #
 # csv_Fw.py
 # 이 파일은 Streamlit 앱에서 모듈로 사용됩니다.
-# 따라서, 콘솔 출력 관련 코드(print, sys, io 등)는 모두 제거했습니다.
+#
 
 import pandas as pd
 import numpy as np
@@ -17,36 +17,37 @@ def clean_string_format(value):
         return value[2:-1]
     return value
 
-# read_csv_with_dynamic_header 함수는 Streamlit 앱에서 이미 정의되어 있으므로 필요 없습니다.
-# 하지만 파일 로드 키워드만 Fw 데이터에 맞게 변경하여 함수를 하나로 통합합니다.
 def read_csv_with_dynamic_header_for_Fw(uploaded_file):
     """Fw 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수"""
     try:
         file_content = io.BytesIO(uploaded_file.getvalue())
-        # UTF-8 인코딩으로 시도, 실패 시 다른 인코딩으로 대체 가능
-        df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding='utf-8')
-        
-        # 'Fw' 관련 필드명으로 키워드 수정
-        keywords = ['SNumber', 'FwStamp', 'FwPC', 'FwPass']
-        
-        header_row = None
-        for i, row in df_temp.iterrows():
-            row_values = [str(x).strip() for x in row.values if pd.notna(x)]
-            
-            if all(keyword in row_values for keyword in keywords):
-                header_row = i
-                break
-        
-        if header_row is not None:
-            file_content.seek(0)
-            df = pd.read_csv(file_content, header=header_row, encoding='utf-8')
-            return df
-        else:
-            return None
+        # 다양한 인코딩으로 파일 읽기 시도
+        encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
+        df = None
+        for encoding in encodings:
+            try:
+                file_content.seek(0)
+                df_temp = pd.read_csv(file_content, header=None, nrows=100, encoding=encoding)
+                
+                keywords = ['SNumber', 'FwStamp', 'FwPC', 'FwPass']
+                
+                header_row = None
+                for i, row in df_temp.iterrows():
+                    row_values = [str(x).strip() for x in row.values if pd.notna(x)]
+                    if all(keyword in row_values for keyword in keywords):
+                        header_row = i
+                        break
+                
+                if header_row is not None:
+                    file_content.seek(0)
+                    df = pd.read_csv(file_content, header=header_row, encoding=encoding)
+                    return df
+            except Exception:
+                continue
+        return None
     except Exception as e:
         return None
 
-# B파일 분석 로직 함수 (Fw 데이터를 분석하도록 수정)
 def analyze_Fw_data(df):
     """Fw 데이터의 분석 로직을 담고 있는 함수"""
     # 데이터 전처리
@@ -58,13 +59,15 @@ def analyze_Fw_data(df):
 
     summary_data = {}
     
-    # FwPC 열이 없는 경우를 대비
     if 'FwPC' not in df.columns:
         df['FwPC'] = 'DefaultJig'
 
-    # 'FwPC'를 기준으로 그룹화
+    # 전체 데이터에서 한번이라도 PASS한 SNumber들을 미리 계산 (더 정확한 가성불량 판정을 위함)
+    jig_pass_history = df[df['PassStatusNorm'] == 'O'].groupby('FwPC')['SNumber'].unique().apply(set).to_dict()
+
     for jig, group in df.groupby('FwPC'):
-        if group['FwStamp'].dt.date.dropna().empty:
+        group = group.dropna(subset=['FwStamp'])
+        if group.empty:
             continue
         
         for d, day_group in group.groupby(group['FwStamp'].dt.date):
@@ -73,33 +76,27 @@ def analyze_Fw_data(df):
             
             date_iso = pd.to_datetime(d).strftime("%Y-%m-%d")
 
-            pass_sns_series = day_group.groupby('SNumber')['PassStatusNorm'].apply(lambda x: 'O' in x.tolist())
-            pass_sns = pass_sns_series[pass_sns_series].index.tolist()
-
-            pass_count = (day_group['PassStatusNorm'] == 'O').sum()
+            # 해당 Jig에서 한번이라도 통과한 전체 SN 목록
+            current_jig_passed_sns = jig_pass_history.get(jig, set())
             
-            false_defect_df = day_group[(day_group['PassStatusNorm'] == 'X') & (day_group['SNumber'].isin(pass_sns))]
-            false_defect_count = false_defect_df.shape[0]
-            false_defect_sns = false_defect_df['SNumber'].unique().tolist()
-            
-            true_defect_df = day_group[(day_group['PassStatusNorm'] == 'X') & (~day_group['SNumber'].isin(pass_sns))]
-            true_defect_count = true_defect_df.shape[0]
-            # 수정: 진성불량 상세 목록 추가
-            true_defect_sns = true_defect_df['SNumber'].unique().tolist()
-
-            total_test = len(day_group)
-            fail_count = false_defect_count + true_defect_count
-            
-            # 수정: FAIL 상세 목록 추가
+            # 각 카테고리별 데이터프레임 필터링
+            pass_df = day_group[day_group['PassStatusNorm'] == 'O']
             fail_df = day_group[day_group['PassStatusNorm'] == 'X']
-            fail_sns = fail_df['SNumber'].unique().tolist()
-
+            
+            false_defect_df = fail_df[fail_df['SNumber'].isin(current_jig_passed_sns)]
+            true_defect_df = fail_df[~fail_df['SNumber'].isin(current_jig_passed_sns)]
+            
+            # 각 항목별 건수 (테스트 횟수)
+            pass_count = len(pass_df)
+            false_defect_count = len(false_defect_df)
+            true_defect_count = len(true_defect_df)
+            fail_count = len(fail_df)
+            total_test = len(day_group)
             rate = 100 * pass_count / total_test if total_test > 0 else 0
 
             if jig not in summary_data:
                 summary_data[jig] = {}
             
-            # 수정: 모든 상세 목록을 summary_data에 포함
             summary_data[jig][date_iso] = {
                 'total_test': total_test,
                 'pass': pass_count,
@@ -107,16 +104,18 @@ def analyze_Fw_data(df):
                 'true_defect': true_defect_count,
                 'fail': fail_count,
                 'pass_rate': f"{rate:.1f}%",
+                
+                # 상세 데이터를 DataFrame을 dict 리스트로 변환하여 전달
+                'pass_data': pass_df.to_dict('records'),
+                'false_defect_data': false_defect_df.to_dict('records'),
+                'true_defect_data': true_defect_df.to_dict('records'),
+                'fail_data': fail_df.to_dict('records'),
 
-                'pass_sns': pass_sns,
-                'false_defect_sns': false_defect_sns,
-                'true_defect_sns': true_defect_sns,
-                'fail_sns': fail_sns,
-
-                'pass_unique_count': len(pass_sns),
-                'false_defect_unique_count': len(false_defect_sns),
-                'true_defect_unique_count': len(true_defect_sns),
-                'fail_unique_count': len(fail_sns)
+                # 고유 SN 건수
+                'pass_unique_count': len(pass_df['SNumber'].unique()),
+                'false_defect_unique_count': len(false_defect_df['SNumber'].unique()),
+                'true_defect_unique_count': len(true_defect_df['SNumber'].unique()),
+                'fail_unique_count': len(fail_df['SNumber'].unique())
             }
     
     all_dates = sorted(list(df['FwStamp'].dt.date.dropna().unique()))
