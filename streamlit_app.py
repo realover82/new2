@@ -129,23 +129,42 @@ def display_analysis_result(analysis_key, file_name, props):
     if st.button("상세 내역 조회", key=f"show_details_btn_{analysis_key}"):
         st.session_state[f'show_details_{analysis_key}'] = True
         st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
+        st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' # 필터 모드 초기화
+
 
     if st.session_state[f'show_details_{analysis_key}']:
         if f'detail_mode_{analysis_key}' not in st.session_state:
             st.session_state[f'detail_mode_{analysis_key}'] = 'all'
 
-        detail_col1, detail_col2, detail_col3 = st.columns(3)
+        # detail_col1, detail_col2, detail_col3 = st.columns(3)
+        detail_col1, detail_col2, detail_col3, detail_col4, detail_col5 = st.columns(5) # 5개의 컬럼으로 확장
+        
         with detail_col1:
             if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'all'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
         with detail_col2:
             if st.button("불량만 보기", key=f"detail_defects_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
         with detail_col3:
             if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
+                
+        # === 새로운 필터 버튼 추가 ===
+        with detail_col4:
+            if st.button("불량(초과,미달만)", key=f"filter_qc_fail_{analysis_key}"):
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'FailOnly'
+                st.session_state[f'detail_mode_{analysis_key}'] = 'all' # 전체 모드에서 필터링
+        with detail_col5:
+            if st.button("PASS(초과,미달만)", key=f"filter_qc_pass_{analysis_key}"):
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'PassOnly'
+                st.session_state[f'detail_mode_{analysis_key}'] = 'all' # 전체 모드에서 필터링
+        # =============================    
         
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
+        qc_filter_mode = st.session_state[f'qc_filter_mode_{analysis_key}'] #추가
         
         for date_obj in filtered_dates:
             st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
@@ -172,6 +191,37 @@ def display_analysis_result(analysis_key, file_name, props):
                     
                     if not full_data_list:
                         continue
+                    
+                    # === 핵심 수정: QC 필터링 로직 적용 ===
+                    if qc_filter_mode != 'None':
+                        # 필터링할 QC 컬럼을 찾습니다. (selected_detail_fields를 사용하면 안전합니다.)
+                        selected_qc_cols_for_filter = [col for col in selected_detail_fields if col.endswith('_QC')]
+                        
+                        if selected_qc_cols_for_filter:
+                            filtered_list = []
+                            target_statuses = ['미달', '초과']
+                            
+                            for record in full_data_list:
+                                is_target_status = False
+                                for qc_col in selected_qc_cols_for_filter:
+                                    qc_value = record.get(qc_col)
+                                    
+                                    if qc_filter_mode == 'FailOnly' and qc_value in target_statuses:
+                                        is_target_status = True
+                                        break
+                                    elif qc_filter_mode == 'PassOnly' and qc_value == 'Pass':
+                                        is_target_status = True
+                                        break
+                                
+                                if is_target_status:
+                                    filtered_list.append(record)
+                            
+                            full_data_list = filtered_list # 필터링된 리스트로 교체
+
+                    if not full_data_list:
+                        # 필터링 후 데이터가 없으면 다음 카테고리로 넘어갑니다.
+                        continue
+                    # ======================================
 
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
