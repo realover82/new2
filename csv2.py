@@ -136,7 +136,7 @@ def analyze_data(df):
     # QC 체크를 원하는 모든 메인 측정 컬럼 목록
     qc_columns = [
         'PcbSleepCurr',  'PcbIrCurr', 'PcbIrPwr', 
-        'PcbWirelessVolt', 'PcbLed'
+        'PcbWirelessVolt', 'PcbBatVolt', 'PcbUsbCurr', 'PcbWirelessUsbVolt','PcbLed'
     ] # 'PcbBatVolt', 'PcbUsbCurr', 'PcbWirelessUsbVolt',
 
     for col_name in qc_columns:
