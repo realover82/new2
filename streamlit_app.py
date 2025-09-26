@@ -185,23 +185,29 @@ def display_analysis_result(analysis_key, file_name, props):
     #     st.info("그래프를 표시할 데이터가 없습니다.")
 
     st.markdown("---")
-
+    
     # --- 상세 내역 (일별) ---
     st.subheader("상세 내역 (일별)")
     
     # === 핵심 수정 1: 상세 내역 필드 선택 기능 추가 ===
     
     # df_raw의 모든 컬럼을 가져옵니다.
-    all_raw_columns = df_raw.columns.tolist()
+    all_raw_columns = df_raw.columns.tolist() # <--- 이미 QC 컬럼을 포함하고 있음
     
-    # 초기 선택 값 설정: field_mapping에 저장된 키워드를 기본으로 선택합니다.
-    default_fields = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+    # 기본 선택 값 설정: field_mapping에 저장된 키워드에 'PassStatusNorm'과 새로운 QC 컬럼들을 추가하여 기본으로 보여줍니다.
+    default_fields = st.session_state.field_mapping.get(analysis_key, ['SNumber', 'PassStatusNorm'])
+    
+    # QC 컬럼이 있다면 기본값에 추가 (예: PcbSleepCurr_QC)
+    qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
+    
+    # 필수 필드와 찾은 QC 필드를 합쳐서 기본값으로 사용합니다. (중복 방지를 위해 set 사용 후 list 변환)
+    initial_default = list(set(default_fields + qc_cols_found)) 
     
     # 사용자가 보고 싶은 필드를 선택합니다.
     selected_detail_fields = st.multiselect(
         "상세 내역에 표시할 필드 선택",
         all_raw_columns,
-        default=default_fields,
+        default=initial_default, # <--- 기본값을 수정합니다.
         key=f"detail_fields_select_{analysis_key}"
     )
     # ========================================================
