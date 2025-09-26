@@ -50,27 +50,11 @@ def read_csv_with_dynamic_header(uploaded_file):
                         break
                 
                 if header_row is not None:
-                    # 4. 헤더를 찾았으면 해당 행부터 다시 읽기 시작
-                    file_io.seek(0) # 파일 커서 초기화
-                    df = pd.read_csv(file_io, header=header_row, dtype=str, skipinitialspace=True)
+                    file_content.seek(0)
+                    df = pd.read_csv(file_content, header=header_row, encoding=encoding, dtype=str, skipinitialspace=True)
                     
-                    # === 실제 컬럼 이름을 session_state에 저장 (상세 내역 출력을 위함) ===
-                    actual_field_mapping = []
-                    actual_cols_lower = {col.strip().lower(): col for col in df.columns}
-                    
-                    for keyword in search_keywords:
-                        if keyword in actual_cols_lower:
-                            actual_field_mapping.append(actual_cols_lower[keyword])
-
-                    if 'field_mapping' not in st.session_state:
-                        st.session_state.field_mapping = {}
-                        
-                    st.session_state.field_mapping['Pcb'] = actual_field_mapping
-                    # =======================================================
-                    
-                    st.sidebar.markdown("---")
-                    st.sidebar.subheader("찾은 컬럼 목록")
-                    st.sidebar.write(df.columns.tolist())
+                    # [제거] st.session_state.field_mapping 저장 로직 제거 (streamlit_app.py에서 처리)
+                    # [제거] st.sidebar.markdown/subheader/write 로직 제거 (streamlit_app.py에서 처리)
                     
                     return df
             except UnicodeDecodeError:

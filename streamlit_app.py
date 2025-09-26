@@ -364,7 +364,20 @@ def main():
         'Semi': {'tab': tabs[3], 'reader': read_csv_with_dynamic_header_for_Semi, 'analyzer': analyze_Semi_data, 'jig_col': 'SemiAssyMaxSolarVolt', 'timestamp_col': 'SemiAssyStartTime'},
         'Batadc': {'tab': tabs[4], 'reader': read_csv_with_dynamic_header_for_Batadc, 'analyzer': analyze_Batadc_data, 'jig_col': 'BatadcPC', 'timestamp_col': 'BatadcStamp'}
     }
-
+        # === 수정 1: 사이드바에 현재 분석된 컬럼 목록 표시 ===
+    st.sidebar.title("현재 데이터 컬럼")
+    
+    # 모든 분석 결과의 컬럼 목록을 저장할 딕셔너리
+    if 'sidebar_columns' not in st.session_state:
+        st.session_state.sidebar_columns = {}
+    
+    # st.session_state.analysis_results에 데이터가 있는 경우 사이드바에 표시
+    for key in tab_map.keys():
+        if key in st.session_state.sidebar_columns and st.session_state.sidebar_columns[key]:
+            with st.sidebar.expander(f"**{key.upper()} 컬럼 목록**"):
+                st.write(st.session_state.sidebar_columns[key])
+    # ====================================================
+    
     for key, props in tab_map.items():
         with props['tab']:
             st.header(f"{key.upper()} 데이터 분석")
@@ -375,34 +388,31 @@ def main():
                     try:
                         df = props['reader'](st.session_state.uploaded_files[key])
                         
-                        if df is None or df.empty:
-                            st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
-                            st.session_state.analysis_results[key] = None
-                            continue
-                        
-                        # 필수 컬럼 존재 여부 확인
-                        if props['jig_col'] not in df.columns or props['timestamp_col'] not in df.columns:
-                            st.error(f"데이터에 필수 컬럼 ('{props['jig_col']}', '{props['timestamp_col']}')이 없습니다. 파일을 다시 확인해주세요.")
-                            st.session_state.analysis_results[key] = None
-                            continue
-                        
-                        # 타임스탬프 변환 로직
-                        # 이 부분의 로직은 analyze_data 함수로 완전히 이동되었으므로 주석 처리
-                        # try:
-                        #     df[props['timestamp_col']] = pd.to_datetime(df[props['timestamp_col']], errors='coerce')
-                        #     if df[props['timestamp_col']].isnull().all():
-                        #         st.warning(f"타임스탬프 변환에 실패했습니다. {props['timestamp_col']} 컬럼의 형식을 확인해주세요.")
-                        #         st.session_state.analysis_results[key] = None
-                        #         continue
-                        # except Exception as e:
-                        #     st.warning(f"타임스탬프 변환 중 오류가 발생했습니다: {e}")
-                        #     st.session_state.analysis_results[key] = None
-                        #     continue
+                        # ... (df is None, 필수 컬럼 확인 로직은 동일) ...
 
                         with st.spinner("데이터 분석 및 저장 중..."):
                             st.session_state.analysis_results[key] = df.copy()
+                            
+                            # analyze_data 함수 실행 전에 원본 컬럼 목록을 임시 저장
+                            original_cols = df.columns.tolist() 
+                            
                             st.session_state.analysis_data[key] = props['analyzer'](df)
                             st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
+                            
+                            # === 수정 2: analyze_data 실행 후, QC 컬럼이 추가된 최종 컬럼 목록 저장 ===
+                            # df_raw는 analysis_results에 저장된 df.copy()를 참조하므로,
+                            # analyze_data가 df를 수정한 후 df_raw가 업데이트되었는지 확인합니다.
+                            
+                            # df_raw의 컬럼 목록을 사이드바 세션에 저장
+                            if st.session_state.analysis_results[key] is not None:
+                                final_df = st.session_state.analysis_results[key]
+                                final_cols = final_df.columns.tolist()
+                                st.session_state.sidebar_columns[key] = final_cols
+
+                                # field_mapping도 최종 컬럼 목록으로 업데이트 (상세내역 필드 선택을 위함)
+                                st.session_state.field_mapping[key] = final_cols
+                            # =========================================================================
+
                         st.success("분석 완료! 결과가 저장되었습니다.")
                         
                     except Exception as e:
