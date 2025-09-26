@@ -176,6 +176,10 @@ def display_analysis_result(analysis_key, file_name, props):
                 # df_raw에서 QC 컬럼 이름들을 찾습니다.
                 qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
 
+                # === 문제 해결: qc_summary_html_parts 변수를 여기에 초기화해야 합니다. ===
+                qc_summary_parts = []
+                # =========================================================================
+                
                 if qc_cols_found:
                     qc_summary_html = "<div>"
                     
