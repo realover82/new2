@@ -394,6 +394,12 @@ def main():
         st.session_state.field_mapping = {}
     if 'sidebar_columns' not in st.session_state:
         st.session_state.sidebar_columns = {}
+        
+    # === 핵심 수정: qc_filter_mode 세션 상태 초기화 추가 ===
+    for key in ['Pcb', 'Fw', 'RfTx', 'Semi', 'Batadc']:
+        if f'qc_filter_mode_{key}' not in st.session_state:
+            st.session_state[f'qc_filter_mode_{key}'] = 'None'
+    # ========================================================    
 
     tabs = st.tabs(["파일 Pcb 분석", "파일 Fw 분석", "파일 RfTx 분석", "파일 Semi 분석", "파일 Batadc 분석"])
     tab_map = {
