@@ -296,13 +296,27 @@ def display_analysis_result(analysis_key, file_name, props):
             st.markdown("---")
 
     # --- DB 원본 확인 및 상세 검색 기능 ---
-    st.subheader("DB 원본 상세 검색")
+    st.subheader("DB 원본 상세 df 검색")
     search_col1, search_col2, search_col3 = st.columns([1, 2, 1])
     with search_col1:
         snumber_query = st.text_input("SNumber 검색", key=f"snumber_search_{analysis_key}")
     with search_col2:
         all_columns = df_raw.columns.tolist()
-        selected_columns = st.multiselect("표시할 필드(열) 선택", all_columns, key=f"col_select_{analysis_key}")
+        
+        # === QC 컬럼들을 기본 선택 목록에 포함시켜 활성화 ===
+        # QC 컬럼을 식별하여 기본 선택 목록에 추가합니다.
+        qc_cols_found = [col for col in all_columns if col.endswith('_QC')]
+        
+        # 'SNumber'를 포함한 모든 컬럼을 옵션으로 제공합니다. (이미 all_columns에 포함됨)
+        # 필드 선택 목록은 df_raw의 모든 컬럼을 포함하므로, QC 컬럼도 선택 가능합니다.
+        
+        selected_columns = st.multiselect(
+            "표시할 필드(열) 선택", 
+            all_columns, 
+            key=f"col_select_{analysis_key}",
+            default=[col for col in all_columns if col in ['SNumber', 'PassStatusNorm'] or col.endswith('_QC')] # SNumber, PassStatusNorm, QC 컬럼을 기본 선택
+        )
+        
     with search_col3:
         st.write("") 
         st.write("") 
@@ -317,7 +331,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     applied_filters = st.session_state.get(filter_state_key, {'snumber': '', 'columns': []})
 
-    with st.expander("DB 원본 확인"):
+    with st.expander("df 원본 확인"):
         df_display = df_raw.copy()
         
         if applied_filters['snumber']:
