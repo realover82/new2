@@ -73,6 +73,54 @@ def read_csv_with_dynamic_header(uploaded_file):
     except Exception as e:
         st.error(f"파일을 읽는 중 오류가 발생했습니다: {e}")
         return None
+    
+def apply_qc_check(df, main_col):
+    """특정 컬럼에 대해 Min/Max 컬럼을 찾아 '미달', '초과', 'Pass'를 분류하는 함수"""
+    
+    # 1. 대응되는 Min/Max 컬럼 이름 생성
+    # 예: PcbSleepCurr -> PcbMinSleepCurr, PcbMaxSleepCurr
+    min_col = main_col.replace('Pcb', 'PcbMin')
+    max_col = main_col.replace('Pcb', 'PcbMax')
+    
+    # 컬럼이 존재하는지 확인 (대소문자 무시)
+    cols_lower = {col.strip().lower(): col for col in df.columns}
+    
+    try:
+        min_col_actual = cols_lower[min_col.lower()]
+        max_col_actual = cols_lower[max_col.lower()]
+    except KeyError:
+        # Min/Max 컬럼이 없으면 체크를 건너뜁니다.
+        return df 
+
+    # 2. 비교를 위해 모든 값을 숫자로 변환 (변환 불가능한 값은 NaN 처리)
+    main_col_num = main_col + '_NUM'
+    min_col_num = min_col_actual + '_NUM'
+    max_col_num = max_col_actual + '_NUM'
+    
+    df[main_col_num] = pd.to_numeric(df[main_col].astype(str).str.strip(), errors='coerce')
+    df[min_col_num] = pd.to_numeric(df[min_col_actual].astype(str).str.strip(), errors='coerce')
+    df[max_col_num] = pd.to_numeric(df[max_col_actual].astype(str).str.strip(), errors='coerce')
+
+    # 3. QC 로직 적용
+    qc_col = main_col + '_QC'
+    df[qc_col] = 'Pass'
+    
+    # 미달 (Below Min: Min 값보다 작은 경우)
+    below_min = (df[main_col_num] < df[min_col_num])
+    df.loc[below_min, qc_col] = '미달'
+    
+    # 초과 (Above Max: Max 값보다 큰 경우)
+    above_max = (df[main_col_num] > df[max_col_num])
+    df.loc[above_max, qc_col] = '초과'
+    
+    # 데이터 부족/결측치 처리 (Min/Max 값 또는 측정값이 NaN인 경우)
+    is_na = df[main_col_num].isnull() | df[min_col_num].isnull() | df[max_col_num].isnull()
+    df.loc[is_na, qc_col] = '데이터 부족' 
+    
+    # 4. 임시 컬럼 정리
+    df = df.drop(columns=[main_col_num, min_col_num, max_col_num], errors='ignore')
+
+    return df    
 
 def analyze_data(df):
     """
@@ -83,6 +131,18 @@ def analyze_data(df):
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
 
+    # === 새로운 QC 체크 로직 적용 시작 ===
+    
+    # QC 체크를 원하는 모든 메인 측정 컬럼 목록
+    qc_columns = [
+        'PcbSleepCurr',  'PcbIrCurr', 'PcbIrPwr', 
+        'PcbWirelessVolt', 'PcbLed'
+    ] # 'PcbBatVolt', 'PcbUsbCurr', 'PcbWirelessUsbVolt',
+
+    for col_name in qc_columns:
+        df = apply_qc_check(df, col_name)
+
+    # === 새로운 QC 체크 로직 적용 완료 ===
     # === PassStatusNorm 컬럼 생성 (최우선) ===
     pass_col = 'PcbPass'
     try:
