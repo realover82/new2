@@ -247,13 +247,17 @@ def display_analysis_result(analysis_key, file_name, props):
                         if qc_counts.get('Pass', 0) > 0:
                             parts.append(f"Pass {qc_counts['Pass']}건")
                         if qc_counts.get('미달', 0) > 0:
-                            parts.append(f"미달 {qc_counts['미달']}건")
+                            # parts.append(f"미달 {qc_counts['미달']}건")
+                            parts.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>")
                         if qc_counts.get('초과', 0) > 0:
-                            parts.append(f"초과 {qc_counts['초과']}건")
+                            # parts.append(f"초과 {qc_counts['초과']}건")
+                            parts.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
                         if qc_counts.get('제외', 0) > 0:
-                            parts.append(f"제외 {qc_counts['제외']}건")
+                            # parts.append(f"제외 {qc_counts['제외']}건")
+                            parts.append(f"<span style='color:red;'>제외 {qc_counts['제외']}건</span>")
                         if qc_counts.get('데이터 부족', 0) > 0:
-                            parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            # parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            parts.append(f"<span style='color:red;'>데이터 부족 {qc_counts['데이터 부족']}건</span>")
                             
                         if parts:
                             qc_summary_parts.append(f"{qc_col.replace('_QC', '')}: {', '.join(parts)}")
