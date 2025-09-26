@@ -227,8 +227,46 @@ def display_analysis_result(analysis_key, file_name, props):
 
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
+                    # === 핵심 수정: QC 상태별 건수 계산 및 Expander 제목 구성 ===
+                    
+                    qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
+                    qc_summary_parts = []
+                    
+                    # 1. 각 QC 컬럼별로 집계합니다.
+                    for qc_col in qc_cols_found:
+                        # 해당 데이터 리스트에서 QC 상태 값을 추출합니다.
+                        qc_statuses = [record.get(qc_col) for record in full_data_list if record.get(qc_col) is not None]
+                        
+                        if not qc_statuses:
+                            continue
+                            
+                        qc_counts = pd.Series(qc_statuses).value_counts().to_dict()
+                        
+                        # 주요 QC 상태를 괄호 형식으로 포맷팅합니다.
+                        parts = []
+                        if qc_counts.get('Pass', 0) > 0:
+                            parts.append(f"Pass {qc_counts['Pass']}건")
+                        if qc_counts.get('미달', 0) > 0:
+                            parts.append(f"미달 {qc_counts['미달']}건")
+                        if qc_counts.get('초과', 0) > 0:
+                            parts.append(f"초과 {qc_counts['초과']}건")
+                        if qc_counts.get('제외', 0) > 0:
+                            parts.append(f"제외 {qc_counts['제외']}건")
+                        if qc_counts.get('데이터 부족', 0) > 0:
+                            parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            
+                        if parts:
+                            qc_summary_parts.append(f"{qc_col.replace('_QC', '')}: {', '.join(parts)}")
 
-                    expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                    # 2. 최종 Expander 제목 구성
+                    qc_summary_text = ""
+                    if qc_summary_parts:
+                        # QC 요약 텍스트를 구성 (예: [QC: PcbSleepCurr: Pass 100건, ...])
+                        qc_summary_text = f" [QC: {' | '.join(qc_summary_parts)}]"
+
+                    expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건){qc_summary_text}"
+                    
+                    # === 핵심 수정 끝 ===
                     
                     with st.expander(expander_title, expanded=False):
                         fields_to_display = selected_detail_fields 
