@@ -176,13 +176,12 @@ def display_analysis_result(analysis_key, file_name, props):
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
 
-                    qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
-                    
-                    # === NameError 수정: qc_summary_parts 초기화 ===
+                    # === NameError 수정: qc_summary_parts 초기화 및 로직 ===
                     qc_summary_parts = []
-                    # ================================================
+                    fields_to_check = selected_detail_fields
+                    selected_qc_cols = [col for col in fields_to_check if col.endswith('_QC')]
                     
-                    for qc_col in qc_cols_found:
+                    for qc_col in selected_qc_cols:
                         qc_statuses = [record.get(qc_col) for record in full_data_list if record.get(qc_col) is not None]
                         
                         if not qc_statuses:
@@ -206,30 +205,17 @@ def display_analysis_result(analysis_key, file_name, props):
                             parts.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
                         
                         if parts:
-                            # NameError 발생했던 라인: qc_summary_parts에 추가
                             qc_summary_parts.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts)}")
 
                     # 2. 최종 Expander 제목 구성
-                    qc_summary_text = ""
-                    if qc_summary_parts:
-                        # Expander 제목은 HTML 렌더링이 안되므로, 순수 텍스트 제목만 남깁니다.
-                        title_text_parts = [p for p in qc_summary_parts if 'color:red' not in p]
-                        
-                        # 빨간색이 필요한 QC 요약 부분은 st.markdown으로 분리
-                        qc_summary_html = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts)}</span>]"
-                        
-                        # 제목에는 순수 텍스트만 남깁니다.
-                        expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                    expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
                     
-                    else:
-                        expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
-                        qc_summary_html = ""
-
                     with st.expander(expander_title_base, expanded=False):
                         
                         # 제목 아래에 색상이 적용된 QC 요약 정보 출력
-                        if qc_summary_html:
-                            # st.markdown을 사용하여 HTML을 렌더링합니다.
+                        if qc_summary_parts:
+                            # QC 요약 텍스트를 HTML로 렌더링
+                            qc_summary_html = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts)}</span>]"
                             qc_html = f"<div>{qc_summary_html.replace('QC:', 'QC:')}</div>"
                             st.markdown(qc_html, unsafe_allow_html=True)
                             st.markdown("---")
