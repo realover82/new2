@@ -388,31 +388,19 @@ def main():
                     try:
                         df = props['reader'](st.session_state.uploaded_files[key])
                         
+                        if df is None or df.empty:
+                            st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
+                            st.session_state.analysis_results[key] = None
+                            continue # df가 None이면 여기서 루프를 건너뛰어 아래 df.copy() 오류 방지
+                        
+                        # 필수 컬럼 존재 여부 확인
                         # ... (df is None, 필수 컬럼 확인 로직은 동일) ...
 
                         with st.spinner("데이터 분석 및 저장 중..."):
-                            st.session_state.analysis_results[key] = df.copy()
-                            
-                            # analyze_data 함수 실행 전에 원본 컬럼 목록을 임시 저장
-                            original_cols = df.columns.tolist() 
-                            
+                            # 여기서 df.copy()를 호출하기 전에 df가 None이 아님을 보장했습니다.
+                            st.session_state.analysis_results[key] = df.copy() # <--- 이 부분에서 오류 발생 방지
                             st.session_state.analysis_data[key] = props['analyzer'](df)
                             st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
-                            
-                            # === 수정 2: analyze_data 실행 후, QC 컬럼이 추가된 최종 컬럼 목록 저장 ===
-                            # df_raw는 analysis_results에 저장된 df.copy()를 참조하므로,
-                            # analyze_data가 df를 수정한 후 df_raw가 업데이트되었는지 확인합니다.
-                            
-                            # df_raw의 컬럼 목록을 사이드바 세션에 저장
-                            if st.session_state.analysis_results[key] is not None:
-                                final_df = st.session_state.analysis_results[key]
-                                final_cols = final_df.columns.tolist()
-                                st.session_state.sidebar_columns[key] = final_cols
-
-                                # field_mapping도 최종 컬럼 목록으로 업데이트 (상세내역 필드 선택을 위함)
-                                st.session_state.field_mapping[key] = final_cols
-                            # =========================================================================
-
                         st.success("분석 완료! 결과가 저장되었습니다.")
                         
                     except Exception as e:

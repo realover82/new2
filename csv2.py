@@ -20,48 +20,54 @@ def clean_string_format(value):
 def read_csv_with_dynamic_header(uploaded_file):
     """
     PCB 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수.
-    헤더를 찾기 위해 파일 전체를 읽고, 대소문자 및 공백을 무시합니다.
+    헤더를 찾기 위해 파일을 문자열로 읽어와 유연하게 처리합니다.
     """
     try:
-        file_content = uploaded_file.getvalue() # BytesIO가 아닌 raw content를 사용
+        file_content = uploaded_file.getvalue()
         encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
         df = None
         
-        # 검색용 키워드는 소문자로 유지
         search_keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
 
         for encoding in encodings:
             try:
-                # 1. 파일 내용을 문자열로 디코딩
                 file_string = file_content.decode(encoding)
                 file_io = io.StringIO(file_string)
                 
-                # 2. 헤더 찾기: 전체 내용을 한 번에 읽어와 분석
+                # 헤더 찾기: 전체 내용을 한 번에 읽어와 분석
                 df_temp = pd.read_csv(file_io, header=None, na_filter=False, dtype=str, skipinitialspace=True)
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
-                    # 모든 값을 소문자로 변환하고 양쪽 공백 및 탭 문자 제거
                     row_values_lower = [str(x).strip().lower().replace('\t', '') for x in row.values]
                     
-                    # 3. 필수 키워드가 모두 포함된 행을 찾습니다.
+                    # 필수 키워드가 모두 포함된 행을 찾습니다.
                     if all(keyword in row_values_lower for keyword in search_keywords):
                         header_row = i
                         break
                 
                 if header_row is not None:
-                    file_content.seek(0)
-                    df = pd.read_csv(file_content, header=header_row, encoding=encoding, dtype=str, skipinitialspace=True)
+                    file_io.seek(0)
+                    df = pd.read_csv(file_io, header=header_row, dtype=str, skipinitialspace=True)
                     
-                    # [제거] st.session_state.field_mapping 저장 로직 제거 (streamlit_app.py에서 처리)
-                    # [제거] st.sidebar.markdown/subheader/write 로직 제거 (streamlit_app.py에서 처리)
+                    # === 필드 매핑 로직 (기존 로직 유지) ===
+                    actual_field_mapping = []
+                    actual_cols_lower = {col.strip().lower(): col for col in df.columns}
+                    
+                    for keyword in search_keywords:
+                        if keyword in actual_cols_lower:
+                            actual_field_mapping.append(actual_cols_lower[keyword])
+
+                    if 'field_mapping' not in st.session_state:
+                        st.session_state.field_mapping = {}
+                        
+                    st.session_state.field_mapping['Pcb'] = actual_field_mapping
+                    # =======================================
                     
                     return df
             except UnicodeDecodeError:
-                # 다음 인코딩 시도
                 continue
-            except Exception as e:
-                # 그 외 예외 발생 시 다음 인코딩 시도
+            except Exception:
                 continue
         
         st.error("파일 헤더를 찾을 수 없습니다. 필수 컬럼이 누락되었거나 형식이 다릅니다.")
