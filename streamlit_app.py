@@ -165,6 +165,50 @@ def display_analysis_result(analysis_key, file_name, props):
 
                 st.markdown(f"**PC(Jig): {jig}**")
                 
+                # === 핵심 수정 1: QC 상태별 집계 및 표시 ===
+                
+                # 해당 Jig와 날짜에 대한 전체 불량/Pass 데이터를 모읍니다.
+                all_records = data_point.get('pass_data', []) + \
+                              data_point.get('false_defect_data', []) + \
+                              data_point.get('true_defect_data', []) + \
+                              data_point.get('fail_data', [])
+                
+                # df_raw에서 QC 컬럼 이름들을 찾습니다.
+                qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
+
+                if qc_cols_found:
+                    qc_summary_html = "<div>"
+                    
+                    # 각 QC 컬럼별로 집계합니다.
+                    for qc_col in qc_cols_found:
+                        if not any(qc_col in record for record in all_records):
+                            # 데이터에 해당 QC 컬럼이 없으면 건너뜁니다.
+                            continue
+                            
+                        # QC 상태별 건수를 계산합니다.
+                        qc_counts = pd.Series([record.get(qc_col) for record in all_records]).value_counts().to_dict()
+                        
+                        # 주요 상태별로 건수를 정리합니다.
+                        pass_count = qc_counts.get('Pass', 0)
+                        fail_count = qc_counts.get('미달', 0) + qc_counts.get('초과', 0)
+                        exclude_count = qc_counts.get('제외', 0)
+                        data_na_count = qc_counts.get('데이터 부족', 0)
+                        
+                        # HTML로 포맷팅합니다.
+                        qc_summary_html += f"**{qc_col.replace('_QC', '')}:** "
+                        qc_summary_html += f"<span>PASS {pass_count}건, </span>"
+                        qc_summary_html += f"<span style='color:red;'>불량 {fail_count}건, </span>"
+                        if exclude_count > 0:
+                            qc_summary_html += f"<span>제외 {exclude_count}건, </span>"
+                        if data_na_count > 0:
+                            qc_summary_html += f"<span>데이터부족 {data_na_count}건 </span>"
+                        qc_summary_html += "<br>"
+                        
+                    qc_summary_html += "</div>"
+                    st.markdown(qc_summary_html, unsafe_allow_html=True)
+                
+                # === 핵심 수정 1 끝 ===
+                
                 if current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
