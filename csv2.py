@@ -15,6 +15,8 @@ def clean_string_format(value):
         return value[2:-1]
     return value
 
+# csv2.py 파일의 read_csv_with_dynamic_header 함수 수정
+
 def read_csv_with_dynamic_header(uploaded_file):
     """
     PCB 데이터에 맞는 키워드로 헤더를 찾아 DataFrame을 로드하는 함수.
@@ -29,18 +31,36 @@ def read_csv_with_dynamic_header(uploaded_file):
                 file_content.seek(0)
                 df_temp = pd.read_csv(file_content, header=None, encoding=encoding, na_filter=False, skipinitialspace=True)
                 
-                keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
+                # 검색용 키워드는 소문자로 유지
+                search_keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
                     row_values_lower = [str(x).strip().lower() for x in row.values]
-                    if all(keyword in row_values_lower for keyword in keywords):
+                    if all(keyword in row_values_lower for keyword in search_keywords):
                         header_row = i
                         break
                 
                 if header_row is not None:
                     file_content.seek(0)
                     df = pd.read_csv(file_content, header=header_row, encoding=encoding, dtype=str, skipinitialspace=True)
+                    
+                    # === 핵심 수정: 실제 컬럼 이름을 session_state에 저장 ===
+                    # 필요한 키워드에 해당하는 실제 컬럼 이름을 찾아서 저장합니다.
+                    actual_field_mapping = []
+                    actual_cols_lower = {col.strip().lower(): col for col in df.columns}
+                    
+                    for keyword in search_keywords:
+                        if keyword in actual_cols_lower:
+                            actual_field_mapping.append(actual_cols_lower[keyword])
+
+                    if 'field_mapping' not in st.session_state:
+                        st.session_state.field_mapping = {}
+                        
+                    # 'Pcb' 분석에 사용될 실제 컬럼 이름 목록을 저장
+                    st.session_state.field_mapping['Pcb'] = actual_field_mapping
+                    # =======================================================
+                    
                     st.sidebar.markdown("---")
                     st.sidebar.subheader("찾은 컬럼 목록")
                     st.sidebar.write(df.columns.tolist())
