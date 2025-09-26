@@ -32,7 +32,7 @@ def read_csv_with_dynamic_header(uploaded_file):
                 df_temp = pd.read_csv(file_content, header=None, encoding=encoding, na_filter=False, skipinitialspace=True)
                 
                 # 검색용 키워드는 소문자로 유지
-                search_keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
+                search_keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr', 'pcbsleepcurr_qc']
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
