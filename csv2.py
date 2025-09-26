@@ -93,9 +93,12 @@ def apply_qc_check(df, main_col):
         max_col_actual = cols_lower[max_col.lower()]
     except KeyError:
         # Min/Max 컬럼이 없으면 체크를 건너뜁니다.
+        # === 수정된 부분: 경고 메시지 출력 ===
+        st.warning(f"QC 체크 건너뜀: '{main_col}'에 대한 필수 제한 컬럼 ('{min_col_name}' 또는 '{max_col_name}')을 찾을 수 없습니다. 컬럼 이름을 확인해주세요.")
         return df 
 
     # 2. 비교를 위해 모든 값을 숫자로 변환 (변환 불가능한 값은 NaN 처리)
+    # ... (나머지 로직은 동일) ...
     main_col_num = main_col + '_NUM'
     min_col_num = min_col_actual + '_NUM'
     max_col_num = max_col_actual + '_NUM'
