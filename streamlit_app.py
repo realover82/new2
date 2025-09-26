@@ -16,7 +16,7 @@ def display_analysis_result(analysis_key, file_name, props):
         st.error("데이터 로드에 실패했습니다. 파일 형식을 확인해주세요.")
         return
 
-    # === 수정된 부분 1: analysis_data 유효성 검사 추가 ===
+    # === 분석 데이터 유효성 검사 ===
     if st.session_state.analysis_data[analysis_key] is None:
         st.error("데이터 분석에 실패했습니다. 분석 함수를 확인해주세요.")
         return
@@ -24,7 +24,7 @@ def display_analysis_result(analysis_key, file_name, props):
     summary_data, all_dates = st.session_state.analysis_data[analysis_key]
     df_raw = st.session_state.analysis_results[analysis_key]
     
-    # 두 번째 수정: all_dates가 여전히 None일 경우를 처리
+    # all_dates가 None일 경우 처리
     if all_dates is None:
         st.error("데이터 분석에 실패했습니다. 날짜 관련 컬럼 형식을 확인해주세요.")
         return
@@ -32,7 +32,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     st.markdown(f"### '{file_name}' 분석 리포트")
 
-    # === 수정된 부분 2: 필수 컬럼 존재 여부 확인 추가 ===
+    # === 필수 컬럼 존재 여부 확인 ===
     required_columns = [props['jig_col'], props['timestamp_col']]
     missing_columns = [col for col in required_columns if col not in df_raw.columns]
     
@@ -88,7 +88,6 @@ def display_analysis_result(analysis_key, file_name, props):
     st.subheader("기간 요약")
     
     if filtered_dates:
-        # 일별 집계 데이터를 DataFrame으로 변환
         summary_df_data = {
             '날짜': [d.strftime('%m-%d') for d in filtered_dates],
             '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates],
@@ -98,139 +97,49 @@ def display_analysis_result(analysis_key, file_name, props):
             'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates]
         }
         summary_df = pd.DataFrame(summary_df_data).set_index('날짜')
-        # 행/열을 바꿔서 표시 (transpose)
         st.dataframe(summary_df.transpose())
     else:
         st.info("선택된 조건에 해당하는 요약 데이터가 없습니다.")
 
     st.markdown("---")
     
-    # --- 일별 추이 그래프 (주석 처리) ---
-    # st.subheader("일자별 불량 추이")
-    # chart_mode_key = f'chart_mode_{analysis_key}'
-    # if chart_mode_key not in st.session_state:
-    #     st.session_state[chart_mode_key] = 'bar'
-
-    # graph_cols = st.columns(2)
-    # with graph_cols[0]:
-    #     if st.button("꺾은선 그래프", key=f"line_chart_btn_{analysis_key}"):
-    #         st.session_state[chart_mode_key] = 'line'
-    # with graph_cols[1]:
-    #     if st.button("막대 그래프", key=f"bar_chart_btn_{analysis_key}"):
-    #         st.session_state[chart_mode_key] = 'bar'
-    
-    # # 1. 모든 raw 데이터에서 필터링
-    # filtered_df_for_chart = df_raw[
-    #     (df_raw[props['jig_col']].isin(jigs_to_display)) &
-    #     (df_raw[props['timestamp_col']].dt.date.isin(filtered_dates))
-    # ].copy()
-    
-    # # 'PassStatusNorm'이 'X'인 데이터만 남깁니다. (PASS 데이터 제외)
-    # filtered_df_for_chart = filtered_df_for_chart[filtered_df_for_chart['PassStatusNorm'] == 'X']
-    
-    # # 2. 시간별 데이터 집계
-    # if not filtered_df_for_chart.empty:
-    #     # 가성불량/진성불량 분리를 위해 SNumber의 PASS 기록을 미리 계산합니다.
-    #     jig_pass_history = df_raw[df_raw['PassStatusNorm'] == 'O'].groupby(props['jig_col'])['SNumber'].unique().apply(set).to_dict()
-    #     current_jig_passed_sns = jig_pass_history.get(selected_jig, set()) if selected_jig != "전체" else set(df_raw[df_raw['PassStatusNorm'] == 'O']['SNumber'].unique())
-        
-    #     # 가성/진성 불량 컬럼을 생성합니다.
-    #     filtered_df_for_chart['불량 유형'] = filtered_df_for_chart['SNumber'].apply(
-    #         lambda sn: '가성불량' if sn in current_jig_passed_sns else '진성불량'
-    #     )
-
-    #     # 시간대별/유형별로 그룹화하고 건수를 셉니다.
-    #     chart_data_list = filtered_df_for_chart.groupby([
-    #         pd.Grouper(key=props['timestamp_col'], freq='H'),
-    #         '불량 유형'
-    #     ]).size().reset_index(name='수량')
-        
-    #     # 'datetime' 컬럼의 날짜 부분과 시간 부분을 분리합니다.
-    #     chart_data_list['날짜'] = chart_data_list[props['timestamp_col']].dt.date
-    #     chart_data_list['시간'] = chart_data_list[props['timestamp_col']].dt.time
-
-    # if not filtered_df_for_chart.empty:
-    #     chart_df_melted = chart_data_list.rename(columns={props['timestamp_col']: 'datetime'})
-
-    #     # Altair 차트 생성
-    #     base = alt.Chart(chart_df_melted).encode(
-    #         x=alt.X('시간:T', axis=alt.Axis(title='시간', format='%H:%M')),
-    #         y=alt.Y('수량:Q', axis=alt.Axis(title='불량 건수'))
-    #     ).properties(
-    #         title='시간대별 불량 건수 추이'
-    #     )
-        
-    #     # 라인 또는 막대 차트
-    #     if st.session_state[chart_mode_key] == 'line':
-    #         chart = base.mark_line(point=True).encode(
-    #             color=alt.Color('불량 유형', legend=alt.Legend(title="불량 유형")),
-    #             tooltip=['datetime:T', '불량 유형', '수량']
-    #         )
-    #     else: # 'bar'
-    #         chart = base.mark_bar().encode(
-    #             color=alt.Color('불량 유형', legend=alt.Legend(title="불량 유형")),
-    #             tooltip=['datetime:T', '불량 유형', '수량']
-    #         )
-        
-    #     # 날짜별로 그래프를 분할
-    #     final_chart = chart.facet(
-    #         column=alt.Column('날짜:N', header=alt.Header(titleOrient="bottom", labelOrient="bottom"))
-    #     ).resolve_scale(
-    #         x='independent',
-    #         y='independent'
-    #     )
-
-    #     st.altair_chart(final_chart, use_container_width=False) # container_width를 False로 설정하여 가로 스크롤 가능하게 함
-    # else:
-    #     st.info("그래프를 표시할 데이터가 없습니다.")
+    # --- 일별 추이 그래프 (주석 처리됨) ---
+    # 그래프 코드는 요청에 따라 제거되었습니다.
 
     st.markdown("---")
-    
+
     # --- 상세 내역 (일별) ---
     st.subheader("상세 내역 (일별)")
     
-    # === 핵심 수정 1: 상세 내역 필드 선택 기능 추가 ===
-    
-    # df_raw의 모든 컬럼을 가져옵니다.
-    all_raw_columns = df_raw.columns.tolist() # <--- 이미 QC 컬럼을 포함하고 있음
-    
-    # 기본 선택 값 설정: field_mapping에 저장된 키워드에 'PassStatusNorm'과 새로운 QC 컬럼들을 추가하여 기본으로 보여줍니다.
+    # 1. 상세 내역 필드 선택 기능 추가
+    all_raw_columns = df_raw.columns.tolist()
     default_fields = st.session_state.field_mapping.get(analysis_key, ['SNumber', 'PassStatusNorm'])
     
-    # QC 컬럼이 있다면 기본값에 추가 (예: PcbSleepCurr_QC)
+    # QC 컬럼이 있다면 기본값에 추가
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
-    
-    # 필수 필드와 찾은 QC 필드를 합쳐서 기본값으로 사용합니다. (중복 방지를 위해 set 사용 후 list 변환)
     initial_default = list(set(default_fields + qc_cols_found)) 
     
-    # 사용자가 보고 싶은 필드를 선택합니다.
     selected_detail_fields = st.multiselect(
         "상세 내역에 표시할 필드 선택",
         all_raw_columns,
-        default=initial_default, # <--- 기본값을 수정합니다.
+        default=initial_default,
         key=f"detail_fields_select_{analysis_key}"
     )
     # ========================================================
 
-    # 1. 상세 내역 보기 제어용 세션 상태 변수 초기화
+    # 2. 상세 내역 보기 제어용 세션 상태 변수 초기화 및 버튼
     if f'show_details_{analysis_key}' not in st.session_state:
         st.session_state[f'show_details_{analysis_key}'] = False
 
-    # 2. 상세 내역 조회 버튼 추가
     if st.button("상세 내역 조회", key=f"show_details_btn_{analysis_key}"):
         st.session_state[f'show_details_{analysis_key}'] = True
-        # 버튼을 누르면 기본적으로 '불량만 보기' 모드로 설정
         st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
 
-    # 3. 버튼이 눌리면 상세 내역 표시
     if st.session_state[f'show_details_{analysis_key}']:
-        # 세션 상태에 상세 보기 모드를 저장할 변수를 초기화합니다.
         if f'detail_mode_{analysis_key}' not in st.session_state:
             st.session_state[f'detail_mode_{analysis_key}'] = 'all'
 
-        # 상세 보기 모드 버튼을 생성합니다.
         detail_col1, detail_col2, detail_col3 = st.columns(3)
-        # ... (상세 보기 모드 버튼 로직은 동일) ...
         with detail_col1:
             if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'all'
@@ -240,8 +149,7 @@ def display_analysis_result(analysis_key, file_name, props):
         with detail_col3:
             if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
-
-        # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
+        
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
         
         for date_obj in filtered_dates:
@@ -254,15 +162,13 @@ def display_analysis_result(analysis_key, file_name, props):
 
                 st.markdown(f"**PC(Jig): {jig}**")
                 
-                # 현재 모드에 따라 표시할 카테고리 필터링
-                # ... (필터링 로직은 동일) ...
                 if current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
                 elif current_mode == 'pass':
                     categories = ['pass']
                     labels = ['PASS']
-                else: # 'all' 또는 특정 날짜 선택
+                else: 
                     categories = ['pass', 'false_defect', 'true_defect', 'fail']
                     labels = ['PASS', '가성불량', '진성불량', 'FAIL']
 
@@ -273,50 +179,42 @@ def display_analysis_result(analysis_key, file_name, props):
                         continue
 
                     count = len(full_data_list)
-                    unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list)) # SNumber가 없을 경우 대비
+                    unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
 
                     expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
                     
                     with st.expander(expander_title, expanded=False):
-                        # === 핵심 수정 2: 선택된 필드를 사용 ===
                         fields_to_display = selected_detail_fields 
-                        # ======================================
                         
                         if not fields_to_display:
                             st.info("표시할 필드가 선택되지 않았습니다.")
                             continue
 
                         for item in full_data_list:
-                            # 선택된 필드만 포맷팅하여 출력
                             formatted_fields = []
                             for field in fields_to_display:
-                                # item.get(field)를 사용하여 해당 필드의 값이 없더라도 오류를 방지합니다.
                                 formatted_fields.append(f"{field}: {item.get(field, 'N/A')}")
                             st.text(", ".join(formatted_fields))
             st.markdown("---")
 
-    # --- DB 원본 확인 및 상세 검색 기능 ---
-    st.subheader("DB 원본 상세 df 검색")
+    # --- DF 조회 기능 ---
+    st.subheader("DF 조회")
     search_col1, search_col2, search_col3 = st.columns([1, 2, 1])
+    
     with search_col1:
         snumber_query = st.text_input("SNumber 검색", key=f"snumber_search_{analysis_key}")
     with search_col2:
         all_columns = df_raw.columns.tolist()
-        
-        # === QC 컬럼들을 기본 선택 목록에 포함시켜 활성화 ===
-        # QC 컬럼을 식별하여 기본 선택 목록에 추가합니다.
-        qc_cols_found = [col for col in all_columns if col.endswith('_QC')]
-        
-        # 'SNumber'를 포함한 모든 컬럼을 옵션으로 제공합니다. (이미 all_columns에 포함됨)
-        # 필드 선택 목록은 df_raw의 모든 컬럼을 포함하므로, QC 컬럼도 선택 가능합니다.
+        # QC 컬럼을 기본 선택 목록에 포함
+        qc_cols_default = [col for col in all_columns if col.endswith('_QC')]
+        default_cols_for_search = ['SNumber', props['timestamp_col'], 'PassStatusNorm'] + qc_cols_default
         
         selected_columns = st.multiselect(
             "표시할 필드(열) 선택", 
             all_columns, 
             key=f"col_select_{analysis_key}",
-            default=[col for col in all_columns if col in ['SNumber', 'PassStatusNorm'] or col.endswith('_QC')] # SNumber, PassStatusNorm, QC 컬럼을 기본 선택
+            default=[col for col in all_columns if col in default_cols_for_search]
         )
-        
     with search_col3:
         st.write("") 
         st.write("") 
@@ -331,11 +229,15 @@ def display_analysis_result(analysis_key, file_name, props):
     
     applied_filters = st.session_state.get(filter_state_key, {'snumber': '', 'columns': []})
 
-    with st.expander("df 원본 확인"):
+    with st.expander("DF 조회"): # Expander 이름도 'DF 조회'로 변경
         df_display = df_raw.copy()
+        
+        has_snumber_query = False
         
         if applied_filters['snumber']:
             query = applied_filters['snumber']
+            has_snumber_query = True
+            
             if 'SNumber' in df_display.columns and pd.api.types.is_string_dtype(df_display['SNumber']):
                 df_display = df_display[df_display['SNumber'].str.contains(query, na=False, case=False)]
             else:
@@ -343,12 +245,20 @@ def display_analysis_result(analysis_key, file_name, props):
                     df_display = df_display[df_display.apply(lambda row: query.lower() in str(row.values).lower(), axis=1)]
                 except Exception:
                     st.warning("SNumber 검색을 지원하지 않는 데이터 형식입니다.")
+                    pass 
 
         if applied_filters['columns']:
             existing_cols = [col for col in applied_filters['columns'] if col in df_display.columns]
             df_display = df_display[existing_cols]
         
-        st.dataframe(df_display)
+        # 결과 출력 및 디버깅 메시지
+        if df_display.empty:
+            if has_snumber_query:
+                st.info(f"선택된 필터 조건 ('{applied_filters['snumber']}')에 해당하는 결과가 없습니다. 검색어를 확인하거나 필터를 해제해 주세요.")
+            else:
+                st.info("데이터프레임에 표시할 행이 없습니다. 분석 데이터(df_raw)를 확인해주세요.")
+        else:
+            st.dataframe(df_display)
 
 
 # ==============================
@@ -369,6 +279,8 @@ def main():
         st.session_state.analysis_time = {k: None for k in ['Pcb', 'Fw', 'RfTx', 'Semi', 'Batadc']}
     if 'field_mapping' not in st.session_state:
         st.session_state.field_mapping = {}
+    if 'sidebar_columns' not in st.session_state:
+        st.session_state.sidebar_columns = {}
 
     tabs = st.tabs(["파일 Pcb 분석", "파일 Fw 분석", "파일 RfTx 분석", "파일 Semi 분석", "파일 Batadc 분석"])
     tab_map = {
@@ -378,20 +290,15 @@ def main():
         'Semi': {'tab': tabs[3], 'reader': read_csv_with_dynamic_header_for_Semi, 'analyzer': analyze_Semi_data, 'jig_col': 'SemiAssyMaxSolarVolt', 'timestamp_col': 'SemiAssyStartTime'},
         'Batadc': {'tab': tabs[4], 'reader': read_csv_with_dynamic_header_for_Batadc, 'analyzer': analyze_Batadc_data, 'jig_col': 'BatadcPC', 'timestamp_col': 'BatadcStamp'}
     }
-        # === 수정 1: 사이드바에 현재 분석된 컬럼 목록 표시 ===
+
+    # === 사이드바 컬럼 목록 표시 (세션 상태 유지) ===
     st.sidebar.title("현재 데이터 컬럼")
-    
-    # 모든 분석 결과의 컬럼 목록을 저장할 딕셔너리
-    if 'sidebar_columns' not in st.session_state:
-        st.session_state.sidebar_columns = {}
-    
-    # st.session_state.analysis_results에 데이터가 있는 경우 사이드바에 표시
     for key in tab_map.keys():
         if key in st.session_state.sidebar_columns and st.session_state.sidebar_columns[key]:
             with st.sidebar.expander(f"**{key.upper()} 컬럼 목록**"):
-                st.write(st.session_state.sidebar_columns[key])
+                st.code(st.session_state.sidebar_columns[key])
     # ====================================================
-    
+
     for key, props in tab_map.items():
         with props['tab']:
             st.header(f"{key.upper()} 데이터 분석")
@@ -405,16 +312,30 @@ def main():
                         if df is None or df.empty:
                             st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
                             st.session_state.analysis_results[key] = None
-                            continue # df가 None이면 여기서 루프를 건너뛰어 아래 df.copy() 오류 방지
+                            continue
                         
                         # 필수 컬럼 존재 여부 확인
-                        # ... (df is None, 필수 컬럼 확인 로직은 동일) ...
+                        if props['jig_col'] not in df.columns or props['timestamp_col'] not in df.columns:
+                            st.error(f"데이터에 필수 컬럼 ('{props['jig_col']}', '{props['timestamp_col']}')이 없습니다. 파일을 다시 확인해주세요.")
+                            st.session_state.analysis_results[key] = None
+                            continue
 
                         with st.spinner("데이터 분석 및 저장 중..."):
-                            # 여기서 df.copy()를 호출하기 전에 df가 None이 아님을 보장했습니다.
-                            st.session_state.analysis_results[key] = df.copy() # <--- 이 부분에서 오류 발생 방지
+                            st.session_state.analysis_results[key] = df.copy()
+                            
+                            # analyze_data 실행
                             st.session_state.analysis_data[key] = props['analyzer'](df)
                             st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
+                            
+                            # analyze_data 실행 후, QC 컬럼이 추가된 최종 컬럼 목록 저장
+                            if st.session_state.analysis_results[key] is not None:
+                                final_df = st.session_state.analysis_results[key]
+                                final_cols = final_df.columns.tolist()
+                                st.session_state.sidebar_columns[key] = final_cols
+
+                                # field_mapping도 최종 컬럼 목록으로 업데이트 (상세내역 필드 선택을 위함)
+                                st.session_state.field_mapping[key] = final_cols
+
                         st.success("분석 완료! 결과가 저장되었습니다.")
                         
                     except Exception as e:
