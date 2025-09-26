@@ -80,11 +80,10 @@ def read_csv_with_dynamic_header(uploaded_file):
 def apply_qc_check(df, main_col):
     """특정 컬럼에 대해 Min/Max 컬럼을 찾아 '미달', '초과', 'Pass'를 분류하는 함수"""
     
-    # 1. 대응되는 Min/Max 컬럼 이름 생성
+    # 1. 대응되는 Min/Max 컬럼 이름 찾기
     min_col_name = main_col.replace('Pcb', 'PcbMin')
     max_col_name = main_col.replace('Pcb', 'PcbMax')
     
-    # 컬럼이 존재하는지 확인 (대소문자 무시)
     cols_lower = {col.strip().lower(): col for col in df.columns}
     
     try:
@@ -95,33 +94,39 @@ def apply_qc_check(df, main_col):
         st.warning(f"QC 체크 건너뜀: '{main_col}'에 대한 필수 제한 컬럼 ('{min_col_name}' 또는 '{max_col_name}')을 찾을 수 없습니다. 컬럼 이름을 확인해주세요.")
         return df 
 
-    # 2. QC Status 컬럼을 즉시 생성 (컬럼 누락 오류 방지)
+    # 2. QC Status 컬럼을 즉시 생성 및 비교를 위한 숫자 변환
     qc_col = main_col + '_QC'
-    df[qc_col] = 'Pass' # QC 컬럼 생성 보장
-    
-    # 3. 임시 Series를 사용하여 비교 수행 (df 내부에 임시 컬럼 생성/삭제 오류 방지)
+    df[qc_col] = 'Pass'
     
     # 비교를 위해 숫자로 변환합니다 (변환 실패 시 NaN).
     main_values = pd.to_numeric(df[main_col].astype(str).str.strip(), errors='coerce')
     min_limits = pd.to_numeric(df[min_col_actual].astype(str).str.strip(), errors='coerce')
     max_limits = pd.to_numeric(df[max_col_actual].astype(str).str.strip(), errors='coerce')
 
-    # 4. QC 로직 적용
+    # === 3. '측정값 0' 제외 로직 (최우선 적용) ===
+    # 측정된 수치가 0인 모든 행을 '제외'로 분류합니다.
+    is_zero_value = (main_values == 0)
+    df.loc[is_zero_value, qc_col] = '제외'
     
-    # 미달 (Below Min: Min 값보다 작은 경우)
-    below_min = (main_values < min_limits)
+    # 4. 나머지 QC 로직 적용 (0이 아니며, 제외되지 않은 행에 대해서만)
+    
+    # '제외'로 분류되지 않은 행을 식별합니다.
+    is_not_excluded = ~is_zero_value
+    
+    # 미달 (Below Min)
+    below_min = (main_values < min_limits) & is_not_excluded
     df.loc[below_min, qc_col] = '미달'
     
-    # 초과 (Above Max: Max 값보다 큰 경우)
-    above_max = (main_values > max_limits)
+    # 초과 (Above Max)
+    above_max = (main_values > max_limits) & is_not_excluded
     df.loc[above_max, qc_col] = '초과'
     
-    # 데이터 부족/결측치 처리 (NaN in main value or limits)
-    # 비교에 필요한 값 중 하나라도 NaN이면 '데이터 부족'으로 처리합니다.
-    is_na = main_values.isnull() | min_limits.isnull() | max_limits.isnull()
+    # 데이터 부족/결측치 처리
+    # is_not_excluded인 행 중에서, 값 중 하나라도 NaN인 경우
+    is_na = (main_values.isnull() | min_limits.isnull() | max_limits.isnull()) & is_not_excluded
     df.loc[is_na, qc_col] = '데이터 부족' 
     
-    return df   
+    return df
 
 def analyze_data(df):
     """

@@ -111,11 +111,16 @@ def display_analysis_result(analysis_key, file_name, props):
     
     # 1. 상세 내역 필드 선택 기능 추가
     all_raw_columns = df_raw.columns.tolist()
-    default_fields = st.session_state.field_mapping.get(analysis_key, ['SNumber', 'PassStatusNorm'])
     
-    # QC 컬럼이 있다면 기본값에 추가
+    # === 핵심 수정: 디폴트 필드를 SNumber와 QC 컬럼으로만 제한 ===
+    # 1. SNumber 필드 이름 찾기 (대소문자 무시)
+    snumber_col = next((col for col in all_raw_columns if col.lower() == 'snumber'), 'SNumber')
+    
+    # 2. 모든 QC 컬럼 찾기
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
-    initial_default = list(set(default_fields + qc_cols_found)) 
+    
+    # 3. 디폴트 목록 구성: SNumber + 모든 QC 컬럼
+    initial_default = list(set([snumber_col] + qc_cols_found)) 
     
     selected_detail_fields = st.multiselect(
         "상세 내역에 표시할 필드 선택",
