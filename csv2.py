@@ -81,52 +81,47 @@ def apply_qc_check(df, main_col):
     """특정 컬럼에 대해 Min/Max 컬럼을 찾아 '미달', '초과', 'Pass'를 분류하는 함수"""
     
     # 1. 대응되는 Min/Max 컬럼 이름 생성
-    # 예: PcbSleepCurr -> PcbMinSleepCurr, PcbMaxSleepCurr
-    min_col = main_col.replace('Pcb', 'PcbMin')
-    max_col = main_col.replace('Pcb', 'PcbMax')
+    min_col_name = main_col.replace('Pcb', 'PcbMin')
+    max_col_name = main_col.replace('Pcb', 'PcbMax')
     
     # 컬럼이 존재하는지 확인 (대소문자 무시)
     cols_lower = {col.strip().lower(): col for col in df.columns}
     
     try:
-        min_col_actual = cols_lower[min_col.lower()]
-        max_col_actual = cols_lower[max_col.lower()]
+        min_col_actual = cols_lower[min_col_name.lower()]
+        max_col_actual = cols_lower[max_col_name.lower()]
     except KeyError:
-        # Min/Max 컬럼이 없으면 체크를 건너뜁니다.
-        # === 수정된 부분: 경고 메시지 출력 ===
+        # Min/Max 컬럼이 없으면 경고 메시지를 출력하고 건너뜁니다.
         st.warning(f"QC 체크 건너뜀: '{main_col}'에 대한 필수 제한 컬럼 ('{min_col_name}' 또는 '{max_col_name}')을 찾을 수 없습니다. 컬럼 이름을 확인해주세요.")
         return df 
 
-    # 2. 비교를 위해 모든 값을 숫자로 변환 (변환 불가능한 값은 NaN 처리)
-    # ... (나머지 로직은 동일) ...
-    main_col_num = main_col + '_NUM'
-    min_col_num = min_col_actual + '_NUM'
-    max_col_num = max_col_actual + '_NUM'
-    
-    df[main_col_num] = pd.to_numeric(df[main_col].astype(str).str.strip(), errors='coerce')
-    df[min_col_num] = pd.to_numeric(df[min_col_actual].astype(str).str.strip(), errors='coerce')
-    df[max_col_num] = pd.to_numeric(df[max_col_actual].astype(str).str.strip(), errors='coerce')
-
-    # 3. QC 로직 적용
+    # 2. QC Status 컬럼을 즉시 생성 (컬럼 누락 오류 방지)
     qc_col = main_col + '_QC'
-    df[qc_col] = 'Pass'
+    df[qc_col] = 'Pass' # QC 컬럼 생성 보장
+    
+    # 3. 임시 Series를 사용하여 비교 수행 (df 내부에 임시 컬럼 생성/삭제 오류 방지)
+    
+    # 비교를 위해 숫자로 변환합니다 (변환 실패 시 NaN).
+    main_values = pd.to_numeric(df[main_col].astype(str).str.strip(), errors='coerce')
+    min_limits = pd.to_numeric(df[min_col_actual].astype(str).str.strip(), errors='coerce')
+    max_limits = pd.to_numeric(df[max_col_actual].astype(str).str.strip(), errors='coerce')
+
+    # 4. QC 로직 적용
     
     # 미달 (Below Min: Min 값보다 작은 경우)
-    below_min = (df[main_col_num] < df[min_col_num])
+    below_min = (main_values < min_limits)
     df.loc[below_min, qc_col] = '미달'
     
     # 초과 (Above Max: Max 값보다 큰 경우)
-    above_max = (df[main_col_num] > df[max_col_num])
+    above_max = (main_values > max_limits)
     df.loc[above_max, qc_col] = '초과'
     
-    # 데이터 부족/결측치 처리 (Min/Max 값 또는 측정값이 NaN인 경우)
-    is_na = df[main_col_num].isnull() | df[min_col_num].isnull() | df[max_col_num].isnull()
+    # 데이터 부족/결측치 처리 (NaN in main value or limits)
+    # 비교에 필요한 값 중 하나라도 NaN이면 '데이터 부족'으로 처리합니다.
+    is_na = main_values.isnull() | min_limits.isnull() | max_limits.isnull()
     df.loc[is_na, qc_col] = '데이터 부족' 
     
-    # 4. 임시 컬럼 정리
-    df = df.drop(columns=[main_col_num, min_col_num, max_col_num], errors='ignore')
-
-    return df    
+    return df   
 
 def analyze_data(df):
     """
