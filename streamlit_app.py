@@ -103,23 +103,15 @@ def display_analysis_result(analysis_key, file_name, props):
 
     st.markdown("---")
     
-    # --- 일별 추이 그래프 (제거됨) ---
-    st.markdown("---")
-
     # --- 상세 내역 (일별) ---
     st.subheader("상세 내역 (일별)")
     
     # 1. 상세 내역 필드 선택 기능 추가
     all_raw_columns = df_raw.columns.tolist()
     
-    # === 핵심 수정: 디폴트 필드를 SNumber와 QC 컬럼으로만 제한 ===
-    # 1. SNumber 필드 이름 찾기 (대소문자 무시)
+    # 디폴트 필드 구성: SNumber와 모든 QC 컬럼으로만 제한
     snumber_col = next((col for col in all_raw_columns if col.lower() == 'snumber'), 'SNumber')
-    
-    # 2. 모든 QC 컬럼 찾기
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
-    
-    # 3. 디폴트 목록 구성: SNumber + 모든 QC 컬럼
     initial_default = list(set([snumber_col] + qc_cols_found)) 
     
     selected_detail_fields = st.multiselect(
@@ -165,54 +157,6 @@ def display_analysis_result(analysis_key, file_name, props):
 
                 st.markdown(f"**PC(Jig): {jig}**")
                 
-                # === 핵심 수정 1: QC 상태별 집계 및 표시 ===
-                
-                # 해당 Jig와 날짜에 대한 전체 불량/Pass 데이터를 모읍니다.
-                all_records = data_point.get('pass_data', []) + \
-                              data_point.get('false_defect_data', []) + \
-                              data_point.get('true_defect_data', []) + \
-                              data_point.get('fail_data', [])
-                
-                # df_raw에서 QC 컬럼 이름들을 찾습니다.
-                qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
-
-                # === 문제 해결: qc_summary_html_parts 변수를 여기에 초기화해야 합니다. ===
-                qc_summary_parts = []
-                # =========================================================================
-                
-                if qc_cols_found:
-                    qc_summary_html = "<div>"
-                    
-                    # 각 QC 컬럼별로 집계합니다.
-                    for qc_col in qc_cols_found:
-                        if not any(qc_col in record for record in all_records):
-                            # 데이터에 해당 QC 컬럼이 없으면 건너뜁니다.
-                            continue
-                            
-                        # QC 상태별 건수를 계산합니다.
-                        qc_counts = pd.Series([record.get(qc_col) for record in all_records]).value_counts().to_dict()
-                        
-                        # 주요 상태별로 건수를 정리합니다.
-                        pass_count = qc_counts.get('Pass', 0)
-                        fail_count = qc_counts.get('미달', 0) + qc_counts.get('초과', 0)
-                        exclude_count = qc_counts.get('제외', 0)
-                        data_na_count = qc_counts.get('데이터 부족', 0)
-                        
-                        # HTML로 포맷팅합니다.
-                        qc_summary_html += f"**{qc_col.replace('_QC', '')}:** "
-                        qc_summary_html += f"<span>PASS {pass_count}건, </span>"
-                        qc_summary_html += f"<span style='color:red;'>불량 {fail_count}건, </span>"
-                        if exclude_count > 0:
-                            qc_summary_html += f"<span>제외 {exclude_count}건, </span>"
-                        if data_na_count > 0:
-                            qc_summary_html += f"<span>데이터부족 {data_na_count}건 </span>"
-                        qc_summary_html += "<br>"
-                        
-                    qc_summary_html += "</div>"
-                    st.markdown(qc_summary_html, unsafe_allow_html=True)
-                
-                # === 핵심 수정 1 끝 ===
-                
                 if current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
@@ -231,14 +175,14 @@ def display_analysis_result(analysis_key, file_name, props):
 
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
-                    # === 핵심 수정: QC 상태별 건수 계산 및 Expander 제목 구성 ===
-                    
+
                     qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
-                    qc_summary_parts = []
                     
-                    # 1. 각 QC 컬럼별로 집계합니다.
+                    # === NameError 수정: qc_summary_parts 초기화 ===
+                    qc_summary_parts = []
+                    # ================================================
+                    
                     for qc_col in qc_cols_found:
-                        # 해당 데이터 리스트에서 QC 상태 값을 추출합니다.
                         qc_statuses = [record.get(qc_col) for record in full_data_list if record.get(qc_col) is not None]
                         
                         if not qc_statuses:
@@ -246,10 +190,8 @@ def display_analysis_result(analysis_key, file_name, props):
                             
                         qc_counts = pd.Series(qc_statuses).value_counts().to_dict()
                         
-                        # 주요 QC 상태를 괄호 형식으로 포맷팅합니다.
                         parts = []
                         
-                        # Pass, 제외, 데이터 부족 (기본색)
                         if qc_counts.get('Pass', 0) > 0:
                             parts.append(f"Pass {qc_counts['Pass']}건")
                         if qc_counts.get('제외', 0) > 0:
@@ -257,23 +199,40 @@ def display_analysis_result(analysis_key, file_name, props):
                         if qc_counts.get('데이터 부족', 0) > 0:
                             parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
                             
-                        # 미달, 초과 (빨간색 적용)
+                        # 미달/초과는 빨간색으로 표시 (HTML 적용)
                         if qc_counts.get('미달', 0) > 0:
                             parts.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>")
                         if qc_counts.get('초과', 0) > 0:
                             parts.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
-                            
-                        if parts:
-                            qc_summary_html_parts.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts)}")
-
-                    # 3. 확장 영역 생성 및 제목 출력
-                    with st.expander(title_text, expanded=False):
                         
-                        # 4. 제목 아래에 색상이 적용된 QC 요약 정보 출력
-                        if qc_summary_html_parts:
-                            qc_html = f"<div>[QC: {' | '.join(qc_summary_html_parts)}]</div>"
-                            st.markdown(qc_html, unsafe_allow_html=True) # HTML 렌더링을 위해 unsafe_allow_html=True 사용
-                            st.markdown("---") # 시각적 구분을 위해 구분선 추가
+                        if parts:
+                            # NameError 발생했던 라인: qc_summary_parts에 추가
+                            qc_summary_parts.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts)}")
+
+                    # 2. 최종 Expander 제목 구성
+                    qc_summary_text = ""
+                    if qc_summary_parts:
+                        # Expander 제목은 HTML 렌더링이 안되므로, 순수 텍스트 제목만 남깁니다.
+                        title_text_parts = [p for p in qc_summary_parts if 'color:red' not in p]
+                        
+                        # 빨간색이 필요한 QC 요약 부분은 st.markdown으로 분리
+                        qc_summary_html = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts)}</span>]"
+                        
+                        # 제목에는 순수 텍스트만 남깁니다.
+                        expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                    
+                    else:
+                        expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                        qc_summary_html = ""
+
+                    with st.expander(expander_title_base, expanded=False):
+                        
+                        # 제목 아래에 색상이 적용된 QC 요약 정보 출력
+                        if qc_summary_html:
+                            # st.markdown을 사용하여 HTML을 렌더링합니다.
+                            qc_html = f"<div>{qc_summary_html.replace('QC:', 'QC:')}</div>"
+                            st.markdown(qc_html, unsafe_allow_html=True)
+                            st.markdown("---")
                         
                         fields_to_display = selected_detail_fields 
                         
