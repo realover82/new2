@@ -242,11 +242,23 @@ def display_analysis_result(analysis_key, file_name, props):
                             st.info("표시할 필드가 선택되지 않았습니다.")
                             continue
 
+                        # 4. 상세 내역 개별 항목 출력 (미달/초과 빨간색 적용)
                         for item in full_data_list:
                             formatted_fields = []
                             for field in fields_to_display:
-                                formatted_fields.append(f"{field}: {item.get(field, 'N/A')}")
-                            st.text(", ".join(formatted_fields))
+                                value = item.get(field, 'N/A')
+                                
+                                # === 개별 항목 빨간색 적용 로직 ===
+                                if field.endswith('_QC') and value in ['미달', '초과']:
+                                    # QC 결과가 '미달' 또는 '초과'일 때 빨간색으로 감쌉니다.
+                                    formatted_fields.append(f"{field}: <span style='color:red;'>{value}</span>")
+                                else:
+                                    formatted_fields.append(f"{field}: {value}")
+                                # ===================================
+                            
+                            # st.markdown을 사용하여 HTML이 렌더링되도록 합니다.
+                            st.markdown(", ".join(formatted_fields), unsafe_allow_html=True)
+
             st.markdown("---")
 
     # --- DF 조회 기능 ---
