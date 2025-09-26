@@ -176,7 +176,28 @@ def display_analysis_result(analysis_key, file_name, props):
 
                 st.markdown(f"**PC(Jig): {jig}**")
                 
-                if current_mode == 'defects':
+                # if current_mode == 'defects':
+                #     categories = ['false_defect', 'true_defect']
+                #     labels = ['가성불량', '진성불량']
+                # elif current_mode == 'pass':
+                #     categories = ['pass']
+                #     labels = ['PASS']
+                # else: 
+                #     categories = ['pass', 'false_defect', 'true_defect', 'fail']
+                #     labels = ['PASS', '가성불량', '진성불량', 'FAIL']
+                
+                # === 1. 카테고리 결정 로직 수정 (필터 모드에 따라 카테고리 강제) ===
+                
+                # QC 필터 모드가 활성화된 경우, 카테고리를 명시적으로 설정합니다.
+                if qc_filter_mode == 'FailOnly':
+                    # categories = ['pass', 'false_defect', 'true_defect', 'fail'] # 모든 데이터를 가져와서 QC 미달/초과만 필터링
+                    # labels = ['PASS', '가성불량', '진성불량', 'FAIL']
+                    categories = ['false_defect', 'true_defect'] # 모든 데이터를 가져와서 QC 미달/초과만 필터링
+                    labels = ['가성불량', '진성불량']
+                elif qc_filter_mode == 'PassOnly':
+                    categories = ['pass'] # PASS 카테고리 데이터만 가져옵니다.
+                    labels = ['PASS']
+                elif current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
                 elif current_mode == 'pass':
@@ -186,15 +207,49 @@ def display_analysis_result(analysis_key, file_name, props):
                     categories = ['pass', 'false_defect', 'true_defect', 'fail']
                     labels = ['PASS', '가성불량', '진성불량', 'FAIL']
 
+                # ============================================================
+
                 for cat, label in zip(categories, labels):
                     full_data_list = data_point.get(f'{cat}_data', [])
                     
                     if not full_data_list:
                         continue
                     
-                    # === 핵심 수정: QC 필터링 로직 적용 ===
-                    if qc_filter_mode != 'None':
-                        # 필터링할 QC 컬럼을 찾습니다. (selected_detail_fields를 사용하면 안전합니다.)
+                    # # === 핵심 수정: QC 필터링 로직 적용 ===
+                    # if qc_filter_mode != 'None':
+                    #     # 필터링할 QC 컬럼을 찾습니다. (selected_detail_fields를 사용하면 안전합니다.)
+                    #     selected_qc_cols_for_filter = [col for col in selected_detail_fields if col.endswith('_QC')]
+                        
+                    #     if selected_qc_cols_for_filter:
+                    #         filtered_list = []
+                    #         target_statuses = ['미달', '초과']
+                            
+                    #         for record in full_data_list:
+                    #             is_target_status = False
+                    #             for qc_col in selected_qc_cols_for_filter:
+                    #                 qc_value = record.get(qc_col)
+                                    
+                    #                 if qc_filter_mode == 'FailOnly' and qc_value in target_statuses:
+                    #                     is_target_status = True
+                    #                     break
+                    #                 elif qc_filter_mode == 'PassOnly' and qc_value == 'Pass':
+                    #                     is_target_status = True
+                    #                     break
+                                
+                    #             if is_target_status:
+                    #                 filtered_list.append(record)
+                            
+                    #         full_data_list = filtered_list # 필터링된 리스트로 교체
+
+                    # if not full_data_list:
+                    #     # 필터링 후 데이터가 없으면 다음 카테고리로 넘어갑니다.
+                    #     continue
+                    # # ======================================
+                    
+                    # === 2. QC 필터링 로직 수정 (각 카테고리별로 필터링) ===
+                    is_qc_filtering_active = qc_filter_mode in ['FailOnly', 'PassOnly']
+
+                    if is_qc_filtering_active:
                         selected_qc_cols_for_filter = [col for col in selected_detail_fields if col.endswith('_QC')]
                         
                         if selected_qc_cols_for_filter:
@@ -202,26 +257,28 @@ def display_analysis_result(analysis_key, file_name, props):
                             target_statuses = ['미달', '초과']
                             
                             for record in full_data_list:
-                                is_target_status = False
+                                qc_value_found = False
                                 for qc_col in selected_qc_cols_for_filter:
                                     qc_value = record.get(qc_col)
                                     
+                                    # 조건 1: '불량(초과,미달만)' 버튼을 눌렀을 경우
                                     if qc_filter_mode == 'FailOnly' and qc_value in target_statuses:
-                                        is_target_status = True
+                                        qc_value_found = True
                                         break
-                                    elif qc_filter_mode == 'PassOnly' and qc_value == 'Pass':
-                                        is_target_status = True
+                                    # 조건 2: 'PASS(초과,미달만)' 버튼을 눌렀을 경우
+                                    elif qc_filter_mode == 'PassOnly' and cat == 'pass' and qc_value in target_statuses:
+                                        # PASS 카테고리 AND QC 미달/초과인 경우만 필터링
+                                        qc_value_found = True
                                         break
                                 
-                                if is_target_status:
+                                if qc_value_found:
                                     filtered_list.append(record)
                             
                             full_data_list = filtered_list # 필터링된 리스트로 교체
 
                     if not full_data_list:
-                        # 필터링 후 데이터가 없으면 다음 카테고리로 넘어갑니다.
                         continue
-                    # ======================================
+                    # ======================================================
 
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
