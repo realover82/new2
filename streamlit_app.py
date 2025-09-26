@@ -189,6 +189,23 @@ def display_analysis_result(analysis_key, file_name, props):
     # --- 상세 내역 (일별) ---
     st.subheader("상세 내역 (일별)")
     
+    # === 핵심 수정 1: 상세 내역 필드 선택 기능 추가 ===
+    
+    # df_raw의 모든 컬럼을 가져옵니다.
+    all_raw_columns = df_raw.columns.tolist()
+    
+    # 초기 선택 값 설정: field_mapping에 저장된 키워드를 기본으로 선택합니다.
+    default_fields = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+    
+    # 사용자가 보고 싶은 필드를 선택합니다.
+    selected_detail_fields = st.multiselect(
+        "상세 내역에 표시할 필드 선택",
+        all_raw_columns,
+        default=default_fields,
+        key=f"detail_fields_select_{analysis_key}"
+    )
+    # ========================================================
+
     # 1. 상세 내역 보기 제어용 세션 상태 변수 초기화
     if f'show_details_{analysis_key}' not in st.session_state:
         st.session_state[f'show_details_{analysis_key}'] = False
@@ -207,6 +224,7 @@ def display_analysis_result(analysis_key, file_name, props):
 
         # 상세 보기 모드 버튼을 생성합니다.
         detail_col1, detail_col2, detail_col3 = st.columns(3)
+        # ... (상세 보기 모드 버튼 로직은 동일) ...
         with detail_col1:
             if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'all'
@@ -216,7 +234,7 @@ def display_analysis_result(analysis_key, file_name, props):
         with detail_col3:
             if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
-        
+
         # 현재 상세 보기 모드에 따라 표시할 카테고리를 결정합니다.
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
         
@@ -231,6 +249,7 @@ def display_analysis_result(analysis_key, file_name, props):
                 st.markdown(f"**PC(Jig): {jig}**")
                 
                 # 현재 모드에 따라 표시할 카테고리 필터링
+                # ... (필터링 로직은 동일) ...
                 if current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
@@ -248,19 +267,25 @@ def display_analysis_result(analysis_key, file_name, props):
                         continue
 
                     count = len(full_data_list)
-                    unique_count = len(set(d['SNumber'] for d in full_data_list))
+                    unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list)) # SNumber가 없을 경우 대비
 
                     expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
                     
                     with st.expander(expander_title, expanded=False):
-                        fields_to_display = st.session_state.field_mapping.get(analysis_key, ['SNumber'])
+                        # === 핵심 수정 2: 선택된 필드를 사용 ===
+                        fields_to_display = selected_detail_fields 
+                        # ======================================
                         
                         if not fields_to_display:
-                            st.info("표시할 필드가 정의되지 않았습니다.")
+                            st.info("표시할 필드가 선택되지 않았습니다.")
                             continue
 
                         for item in full_data_list:
-                            formatted_fields = [f"{field}: {item.get(field, 'N/A')}" for field in fields_to_display]
+                            # 선택된 필드만 포맷팅하여 출력
+                            formatted_fields = []
+                            for field in fields_to_display:
+                                # item.get(field)를 사용하여 해당 필드의 값이 없더라도 오류를 방지합니다.
+                                formatted_fields.append(f"{field}: {item.get(field, 'N/A')}")
                             st.text(", ".join(formatted_fields))
             st.markdown("---")
 
