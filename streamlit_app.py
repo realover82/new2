@@ -244,35 +244,33 @@ def display_analysis_result(analysis_key, file_name, props):
                         
                         # 주요 QC 상태를 괄호 형식으로 포맷팅합니다.
                         parts = []
+                        
+                        # Pass, 제외, 데이터 부족 (기본색)
                         if qc_counts.get('Pass', 0) > 0:
                             parts.append(f"Pass {qc_counts['Pass']}건")
+                        if qc_counts.get('제외', 0) > 0:
+                            parts.append(f"제외 {qc_counts['제외']}건")
+                        if qc_counts.get('데이터 부족', 0) > 0:
+                            parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            
+                        # 미달, 초과 (빨간색 적용)
                         if qc_counts.get('미달', 0) > 0:
-                            # parts.append(f"미달 {qc_counts['미달']}건")
                             parts.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>")
                         if qc_counts.get('초과', 0) > 0:
-                            # parts.append(f"초과 {qc_counts['초과']}건")
                             parts.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
-                        if qc_counts.get('제외', 0) > 0:
-                            # parts.append(f"제외 {qc_counts['제외']}건")
-                            parts.append(f"<span style='color:red;'>제외 {qc_counts['제외']}건</span>")
-                        if qc_counts.get('데이터 부족', 0) > 0:
-                            # parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
-                            parts.append(f"<span style='color:red;'>데이터 부족 {qc_counts['데이터 부족']}건</span>")
                             
                         if parts:
-                            qc_summary_parts.append(f"{qc_col.replace('_QC', '')}: {', '.join(parts)}")
+                            qc_summary_html_parts.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts)}")
 
-                    # 2. 최종 Expander 제목 구성
-                    qc_summary_text = ""
-                    if qc_summary_parts:
-                        # QC 요약 텍스트를 구성 (예: [QC: PcbSleepCurr: Pass 100건, ...])
-                        qc_summary_text = f" [QC: {' | '.join(qc_summary_parts)}]"
-
-                    expander_title = f"{label} - {count}건 (중복값제거 SN: {unique_count}건){qc_summary_text}"
-                    
-                    # === 핵심 수정 끝 ===
-                    
-                    with st.expander(expander_title, expanded=False):
+                    # 3. 확장 영역 생성 및 제목 출력
+                    with st.expander(title_text, expanded=False):
+                        
+                        # 4. 제목 아래에 색상이 적용된 QC 요약 정보 출력
+                        if qc_summary_html_parts:
+                            qc_html = f"<div>[QC: {' | '.join(qc_summary_html_parts)}]</div>"
+                            st.markdown(qc_html, unsafe_allow_html=True) # HTML 렌더링을 위해 unsafe_allow_html=True 사용
+                            st.markdown("---") # 시각적 구분을 위해 구분선 추가
+                        
                         fields_to_display = selected_detail_fields 
                         
                         if not fields_to_display:
