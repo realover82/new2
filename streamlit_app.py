@@ -103,9 +103,7 @@ def display_analysis_result(analysis_key, file_name, props):
 
     st.markdown("---")
     
-    # --- 일별 추이 그래프 (주석 처리됨) ---
-    # 그래프 코드는 요청에 따라 제거되었습니다.
-
+    # --- 일별 추이 그래프 (제거됨) ---
     st.markdown("---")
 
     # --- 상세 내역 (일별) ---
@@ -205,7 +203,6 @@ def display_analysis_result(analysis_key, file_name, props):
         snumber_query = st.text_input("SNumber 검색", key=f"snumber_search_{analysis_key}")
     with search_col2:
         all_columns = df_raw.columns.tolist()
-        # QC 컬럼을 기본 선택 목록에 포함
         qc_cols_default = [col for col in all_columns if col.endswith('_QC')]
         default_cols_for_search = ['SNumber', props['timestamp_col'], 'PassStatusNorm'] + qc_cols_default
         
@@ -229,7 +226,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     applied_filters = st.session_state.get(filter_state_key, {'snumber': '', 'columns': []})
 
-    with st.expander("DF 조회"): # Expander 이름도 'DF 조회'로 변경
+    with st.expander("DF 조회"):
         df_display = df_raw.copy()
         
         has_snumber_query = False
@@ -321,19 +318,21 @@ def main():
                             continue
 
                         with st.spinner("데이터 분석 및 저장 중..."):
-                            st.session_state.analysis_results[key] = df.copy()
                             
-                            # analyze_data 실행
-                            st.session_state.analysis_data[key] = props['analyzer'](df)
+                            # 1. 분석 함수 실행: df에 QC 컬럼이 추가됨 (in-place 수정)
+                            summary_data, all_dates = props['analyzer'](df)
+                            st.session_state.analysis_data[key] = (summary_data, all_dates)
+                            
+                            # 2. QC 컬럼이 추가된 최종 df를 세션 상태에 저장 (순서 변경!)
+                            st.session_state.analysis_results[key] = df.copy() 
+                            
                             st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d')
                             
-                            # analyze_data 실행 후, QC 컬럼이 추가된 최종 컬럼 목록 저장
+                            # 3. 사이드바/상세 내역을 위한 최종 컬럼 목록 업데이트
                             if st.session_state.analysis_results[key] is not None:
                                 final_df = st.session_state.analysis_results[key]
                                 final_cols = final_df.columns.tolist()
                                 st.session_state.sidebar_columns[key] = final_cols
-
-                                # field_mapping도 최종 컬럼 목록으로 업데이트 (상세내역 필드 선택을 위함)
                                 st.session_state.field_mapping[key] = final_cols
 
                         st.success("분석 완료! 결과가 저장되었습니다.")
