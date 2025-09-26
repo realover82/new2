@@ -27,12 +27,14 @@ def read_csv_with_dynamic_header(uploaded_file):
         for encoding in encodings:
             try:
                 file_content.seek(0)
-                df_temp = pd.read_csv(file_content, header=None, encoding=encoding, na_filter=False)
+                # 전체 파일을 header=None으로 먼저 읽어와서 헤더 위치를 찾습니다.
+                df_temp = pd.read_csv(file_content, header=None, encoding=encoding, na_filter=False, skipinitialspace=True)
                 
                 keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
+                    # 모든 값을 소문자로 변환하고 양쪽 공백 제거
                     row_values_lower = [str(x).strip().lower() for x in row.values]
                     if all(keyword in row_values_lower for keyword in keywords):
                         header_row = i
@@ -40,7 +42,7 @@ def read_csv_with_dynamic_header(uploaded_file):
                 
                 if header_row is not None:
                     file_content.seek(0)
-                    df = pd.read_csv(file_content, header=header_row, encoding=encoding)
+                    df = pd.read_csv(file_content, header=header_row, encoding=encoding, dtype=str, skipinitialspace=True)
                     st.sidebar.markdown("---")
                     st.sidebar.subheader("찾은 컬럼 목록")
                     st.sidebar.write(df.columns.tolist())
@@ -63,7 +65,7 @@ def analyze_data(df):
     for col in df.columns:
         df[col] = df[col].apply(clean_string_format)
 
-     # === 수정된 부분: PcbPass 컬럼 존재 여부 확인 및 PassStatusNorm 생성 (최우선) ===
+    # === PassStatusNorm 컬럼 생성 (최우선) ===
     pass_col = 'PcbPass'
     try:
         pass_col_actual = next(col for col in df.columns if col.strip().lower() == pass_col.lower())
@@ -82,50 +84,46 @@ def analyze_data(df):
         return None, None
 
     # === 수정된 타임스탬프 변환 로직 ===
-    converted_series = None
     
-    # 1. YYYYMMDDHHmmss 형식 변환 시도
-    try:
-        converted_series = pd.to_datetime(df[timestamp_col_actual], format='%Y%m%d%H%M%S', errors='coerce')
-    except Exception:
-        pass
+    # 1. YYYYMMDDHHmmss 형식 변환 시도 (문자열 전용)
+    df['temp_converted'] = pd.to_datetime(df[timestamp_col_actual].astype(str).str.strip(), format='%Y%m%d%H%M%S', errors='coerce')
 
-    # 2. 밀리초(ms) 단위 변환 시도 (문자열인 경우 숫자로 변환 후 시도)
-    if converted_series is None or converted_series.isnull().all():
-        try:
-            series_to_convert = pd.to_numeric(df[timestamp_col_actual], errors='coerce')
-            converted_series = pd.to_datetime(series_to_convert, unit='ms', errors='coerce')
-        except Exception:
-            pass
+    # 2. 유닉스 타임스탬프 (초 단위) 변환 시도
+    numeric_series = pd.to_numeric(df[timestamp_col_actual].astype(str).str.strip(), errors='coerce')
     
-    # 3. 초(s) 단위 변환 시도
-    if converted_series is None or converted_series.isnull().all():
-        try:
-            series_to_convert = pd.to_numeric(df[timestamp_col_actual], errors='coerce')
-            converted_series = pd.to_datetime(series_to_convert, unit='s', errors='coerce')
-        except Exception:
-            pass
-            
-    # 4. 다양한 문자열 형식 변환 시도
-    if converted_series is None or converted_series.isnull().all():
-        try:
-            converted_series = pd.to_datetime(df[timestamp_col_actual], errors='coerce')
-        except Exception:
-            pass
+    # 초 단위로 변환한 결과를 임시 컬럼에 저장
+    seconds_converted = pd.to_datetime(numeric_series, unit='s', errors='coerce')
+    
+    # 3. 유닉스 타임스탬프 (밀리초 단위) 변환 시도
+    milliseconds_converted = pd.to_datetime(numeric_series, unit='ms', errors='coerce')
+    
+    # 최종 변환 결과 선택 및 병합
+    
+    # 3-1. 14자리 문자열 변환 결과가 유효하면 사용
+    final_series = df['temp_converted'].copy()
+    
+    # 3-2. 문자열 변환에 실패한 NaN 값들에 대해 초 단위 변환 결과(최근 날짜) 사용
+    is_na = final_series.isnull()
+    
+    # seconds_converted 중 1980년 이후의 날짜만 유효한 것으로 간주하여 1970년 에러 방지
+    is_valid_seconds = seconds_converted.notnull() & (seconds_converted.dt.year > 1980) 
+    final_series[is_na & is_valid_seconds] = seconds_converted[is_na & is_valid_seconds]
+    is_na = final_series.isnull()
 
-    if converted_series is not None and not converted_series.isnull().all():
-        df[timestamp_col_actual] = converted_series
-    else:
+    # 3-3. 초 단위 변환에도 실패한 NaN 값들에 대해 밀리초 단위 변환 결과 사용
+    final_series[is_na] = milliseconds_converted[is_na]
+    
+    # 임시 컬럼 제거 및 최종 업데이트
+    df = df.drop(columns=['temp_converted'], errors='ignore')
+    
+    # 최종 결과 확인 및 컬럼 업데이트
+    if final_series.isnull().all():
         st.warning(f"타임스탬프 변환에 실패했습니다. '{timestamp_col_actual}' 컬럼의 형식을 확인해주세요.")
         return None, None
+        
+    df[timestamp_col_actual] = final_series
     # ======================================
     
-    # 최종 결과 확인
-    if df[timestamp_col_actual].isnull().all():
-        st.warning(f"타임스탬프 변환에 실패했습니다. '{timestamp_col_actual}' 컬럼의 형식을 확인해주세요.")
-        return None, None
-    df['PassStatusNorm'] = df['PcbPass'].fillna('').astype(str).str.strip().str.upper()
-
     summary_data = {}
     
     jig_col = 'PcbMaxIrPwr'
