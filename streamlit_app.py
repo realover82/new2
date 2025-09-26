@@ -176,8 +176,9 @@ def display_analysis_result(analysis_key, file_name, props):
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
 
-                    # === NameError 수정: qc_summary_parts 초기화 및 로직 ===
-                    qc_summary_parts = []
+                    qc_cols_found = [col for col in df_raw.columns if col.endswith('_QC')]
+                    qc_summary_parts_html = []  # HTML 포함 (제목 아래 출력용)
+                    qc_summary_parts_plain = [] # HTML 미포함 (제목 출력용)
                     fields_to_check = selected_detail_fields
                     selected_qc_cols = [col for col in fields_to_check if col.endswith('_QC')]
                     
@@ -189,34 +190,49 @@ def display_analysis_result(analysis_key, file_name, props):
                             
                         qc_counts = pd.Series(qc_statuses).value_counts().to_dict()
                         
-                        parts = []
+                        parts_html = []
+                        parts_plain = []
                         
+                        # --- HTML 및 Plain Text 구성 로직 ---
+                        # Pass, 제외, 데이터 부족 (기본색 / Plain Text)
                         if qc_counts.get('Pass', 0) > 0:
-                            parts.append(f"Pass {qc_counts['Pass']}건")
+                            parts_html.append(f"Pass {qc_counts['Pass']}건")
+                            parts_plain.append(f"Pass {qc_counts['Pass']}건")
                         if qc_counts.get('제외', 0) > 0:
-                            parts.append(f"제외 {qc_counts['제외']}건")
+                            parts_html.append(f"제외 {qc_counts['제외']}건")
+                            parts_plain.append(f"제외 {qc_counts['제외']}건")
                         if qc_counts.get('데이터 부족', 0) > 0:
-                            parts.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            parts_html.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
+                            parts_plain.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
                             
-                        # 미달/초과는 빨간색으로 표시 (HTML 적용)
+                        # 미달/초과 (빨간색 적용 / Plain Text)
                         if qc_counts.get('미달', 0) > 0:
-                            parts.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>")
+                            parts_html.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>")
+                            parts_plain.append(f"미달 {qc_counts['미달']}건")
                         if qc_counts.get('초과', 0) > 0:
-                            parts.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
+                            parts_html.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>")
+                            parts_plain.append(f"초과 {qc_counts['초과']}건")
                         
-                        if parts:
-                            qc_summary_parts.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts)}")
+                        if parts_plain: # 순수 텍스트가 있어야만 집계함
+                            qc_summary_parts_html.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts_html)}")
+                            qc_summary_parts_plain.append(f"{qc_col.replace('_QC', '')}: {', '.join(parts_plain)}")
+                        # --- HTML 및 Plain Text 구성 로직 끝 ---
 
-                    # 2. 최종 Expander 제목 구성
-                    expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건)"
+                    # 1. 제목에 들어갈 순수한 텍스트 QC 요약 구성
+                    qc_summary_plain_text = ""
+                    if qc_summary_parts_plain:
+                        qc_summary_plain_text = f" [QC: {', '.join(qc_summary_parts_plain)}]" # 제목에 들어갈 내용
+                        
+                    # 2. Expander 제목 구성 (순수 텍스트)
+                    expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건){qc_summary_plain_text}"
                     
                     with st.expander(expander_title_base, expanded=False):
                         
-                        # 제목 아래에 색상이 적용된 QC 요약 정보 출력
-                        if qc_summary_parts:
-                            # QC 요약 텍스트를 HTML로 렌더링
-                            qc_summary_html = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts)}</span>]"
-                            qc_html = f"<div>{qc_summary_html.replace('QC:', 'QC:')}</div>"
+                        # 3. 제목 아래에 색상이 적용된 QC 요약 정보 출력 (HTML)
+                        if qc_summary_parts_html:
+                            # HTML 렌더링 시에는 qc_summary_parts_html 사용
+                            qc_summary_html_output = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts_html)}</span>]"
+                            qc_html = f"<div>{qc_summary_html_output.replace('QC:', 'QC:')}</div>"
                             st.markdown(qc_html, unsafe_allow_html=True)
                             st.markdown("---")
                         
