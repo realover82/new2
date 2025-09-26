@@ -127,7 +127,13 @@ def display_analysis_result(analysis_key, file_name, props):
     
     # 'PassStatusNorm'이 'X'인 데이터만 남깁니다. (PASS 데이터 제외)
     filtered_df_for_chart = filtered_df_for_chart[filtered_df_for_chart['PassStatusNorm'] == 'X']
-
+    # PassStatusNorm 컬럼을 추가한 코드 바로 아래에 삽입
+    if 'PassStatusNorm' not in filtered_df_for_chart.columns:
+        print("🚨🚨 오류: PassStatusNorm 컬럼이 DataFrame에 없습니다! 🚨🚨")
+    else:
+        print("✅ 성공: PassStatusNorm 컬럼이 존재합니다.")
+        print("값 예시:", filtered_df_for_chart['PassStatusNorm'].head())
+        
     # 2. 시간별 데이터 집계
     if not filtered_df_for_chart.empty:
         # 가성불량/진성불량 분리를 위해 SNumber의 PASS 기록을 미리 계산합니다.
