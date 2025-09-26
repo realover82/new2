@@ -27,14 +27,12 @@ def read_csv_with_dynamic_header(uploaded_file):
         for encoding in encodings:
             try:
                 file_content.seek(0)
-                # 전체 파일을 header=None으로 먼저 읽어와서 헤더 위치를 찾습니다.
                 df_temp = pd.read_csv(file_content, header=None, encoding=encoding, na_filter=False, skipinitialspace=True)
                 
                 keywords = ['snumber', 'pcbstarttime', 'pcbmaxirpwr', 'pcbpass', 'pcbsleepcurr']
                 
                 header_row = None
                 for i, row in df_temp.iterrows():
-                    # 모든 값을 소문자로 변환하고 양쪽 공백 제거
                     row_values_lower = [str(x).strip().lower() for x in row.values]
                     if all(keyword in row_values_lower for keyword in keywords):
                         header_row = i
@@ -59,7 +57,7 @@ def read_csv_with_dynamic_header(uploaded_file):
 def analyze_data(df):
     """
     PCB 데이터의 분석 로직을 담고 있는 함수.
-    PcbStartTime 컬럼의 다양한 타임스탬프 형식을 처리하도록 보강되었습니다.
+    PcbStartTime 컬럼의 다양한 타임스탬프 형식을 처리하고, 상세 데이터를 전체 컬럼으로 저장합니다.
     """
     # 데이터 전처리
     for col in df.columns:
@@ -83,45 +81,35 @@ def analyze_data(df):
         st.error(f"'{timestamp_col}' 컬럼이 데이터에 없습니다.")
         return None, None
 
-    # === 수정된 타임스탬프 변환 로직 ===
+    # === 타임스탬프 변환 로직 ===
     
     # 1. YYYYMMDDHHmmss 형식 변환 시도 (문자열 전용)
     df['temp_converted'] = pd.to_datetime(df[timestamp_col_actual].astype(str).str.strip(), format='%Y%m%d%H%M%S', errors='coerce')
 
     # 2. 유닉스 타임스탬프 (초 단위) 변환 시도
     numeric_series = pd.to_numeric(df[timestamp_col_actual].astype(str).str.strip(), errors='coerce')
-    
-    # 초 단위로 변환한 결과를 임시 컬럼에 저장
     seconds_converted = pd.to_datetime(numeric_series, unit='s', errors='coerce')
-    
-    # 3. 유닉스 타임스탬프 (밀리초 단위) 변환 시도
     milliseconds_converted = pd.to_datetime(numeric_series, unit='ms', errors='coerce')
     
-    # 최종 변환 결과 선택 및 병합
-    
-    # 3-1. 14자리 문자열 변환 결과가 유효하면 사용
     final_series = df['temp_converted'].copy()
-    
-    # 3-2. 문자열 변환에 실패한 NaN 값들에 대해 초 단위 변환 결과(최근 날짜) 사용
     is_na = final_series.isnull()
     
-    # seconds_converted 중 1980년 이후의 날짜만 유효한 것으로 간주하여 1970년 에러 방지
+    # 초 단위 (seconds) 변환 결과 사용 (1980년 이후의 날짜만 유효한 것으로 간주하여 1970년 에러 방지)
     is_valid_seconds = seconds_converted.notnull() & (seconds_converted.dt.year > 1980) 
     final_series[is_na & is_valid_seconds] = seconds_converted[is_na & is_valid_seconds]
     is_na = final_series.isnull()
 
-    # 3-3. 초 단위 변환에도 실패한 NaN 값들에 대해 밀리초 단위 변환 결과 사용
+    # 밀리초 단위 (milliseconds) 변환 결과 사용
     final_series[is_na] = milliseconds_converted[is_na]
     
-    # 임시 컬럼 제거 및 최종 업데이트
     df = df.drop(columns=['temp_converted'], errors='ignore')
     
-    # 최종 결과 확인 및 컬럼 업데이트
     if final_series.isnull().all():
         st.warning(f"타임스탬프 변환에 실패했습니다. '{timestamp_col_actual}' 컬럼의 형식을 확인해주세요.")
         return None, None
         
     df[timestamp_col_actual] = final_series
+    
     # ======================================
     
     summary_data = {}
@@ -150,6 +138,13 @@ def analyze_data(df):
             false_defect_df = fail_df[fail_df['SNumber'].isin(current_jig_passed_sns)]
             true_defect_df = fail_df[~fail_df['SNumber'].isin(current_jig_passed_sns)]
             
+            # === 핵심 수정: 상세 데이터 저장 시 DataFrame의 모든 컬럼을 포함하도록 to_dict('records') 사용 ===
+            pass_data = pass_df.to_dict('records')
+            false_defect_data = false_defect_df.to_dict('records')
+            true_defect_data = true_defect_df.to_dict('records')
+            fail_data = fail_df.to_dict('records')
+            # =========================================================================================
+
             pass_count = len(pass_df)
             false_defect_count = len(false_defect_df)
             true_defect_count = len(true_defect_df)
@@ -168,10 +163,11 @@ def analyze_data(df):
                 'fail': fail_count,
                 'pass_rate': f"{rate:.1f}%",
                 
-                'pass_data': pass_df.to_dict('records'),
-                'false_defect_data': false_defect_df.to_dict('records'),
-                'true_defect_data': true_defect_df.to_dict('records'),
-                'fail_data': fail_df.to_dict('records'),
+                # 수정된 부분 반영: 모든 컬럼이 포함된 리스트 저장
+                'pass_data': pass_data,
+                'false_defect_data': false_defect_data,
+                'true_defect_data': true_defect_data,
+                'fail_data': fail_data,
 
                 'pass_unique_count': len(pass_df['SNumber'].unique()),
                 'false_defect_unique_count': len(false_defect_df['SNumber'].unique()),
