@@ -4,13 +4,11 @@ from datetime import datetime
 import altair as alt
 
 # 1. 기능별 분할된 모듈 임포트
-# (config.py, analysis_display.py, chart_generator.py는 별도의 파일에 있어야 합니다.)
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_display import display_analysis_result
 from chart_generator import create_stacked_bar_chart 
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
-# 이 파일들은 실제 데이터 로딩 및 분석 로직을 담고 있다고 가정합니다.
 from csv2 import read_csv_with_dynamic_header, analyze_data
 from csv_Fw import read_csv_with_dynamic_header_for_Fw, analyze_Fw_data
 from csv_RfTx import read_csv_with_dynamic_header_for_RfTx, analyze_RfTx_data
@@ -50,10 +48,8 @@ def main():
         if f'qc_filter_mode_{key}' not in st.session_state:
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     
-    # 그래프 표시 플래그 초기화 (가장 중요)
     if 'show_pcb_chart' not in st.session_state:
         st.session_state.show_pcb_chart = False
-    # ======================================================== 
     
     # 분석 탭 정보를 담은 최종 맵
     tab_map = {
@@ -66,13 +62,11 @@ def main():
     }
     
     # ====================================================
-    # 1. 사이드바: 분석 항목 선택 라디오 버튼
+    # 1. 사이드바: 분석 항목 선택 라디오 버튼 및 설정
     # ====================================================
     st.sidebar.title("분석 항목 선택")
     
-    # ANALYSIS_KEYS를 사용하여 라디오 버튼 옵션 생성
     analysis_options = {key: f"파일 {key} 분석" for key in ANALYSIS_KEYS}
-    
     default_key = st.session_state.get('last_selected_analysis_key', 'Pcb')
     
     selected_analysis_label = st.sidebar.radio(
@@ -104,22 +98,25 @@ def main():
     if df_pcb is None or df_pcb.empty:
         st.sidebar.warning("'파일 Pcb 분석' 실행 후 그래프 버튼이 나타납니다.")
     else:
-        # === 핵심 수정: on_click 콜백 함수 사용 ===
-        if st.sidebar.button("PCB QC 요약 그래프 보기", key='generate_pcb_chart_sidebar', on_click=set_show_chart_true):
-             st.toast("그래프가 메인 화면에 생성됩니다.")
-        
-        # 그래프 숨기기 버튼 추가 (선택 사항)
-        if st.session_state.show_pcb_chart and st.sidebar.button("그래프 숨기기", on_click=set_show_chart_false):
-             pass
+        # 버튼 표시 로직
+        if st.session_state.show_pcb_chart:
+            # 그래프가 보일 때: 숨기기 버튼 표시
+            st.sidebar.button("그래프 숨기기", on_click=set_show_chart_false, key='hide_pcb_chart')
+        else:
+            # 그래프가 숨겨져 있을 때: 보기 버튼 표시
+            st.sidebar.button("PCB QC 요약 그래프 보기", on_click=set_show_chart_true, key='show_pcb_chart_btn')
         
         # 다른 분석 항목을 선택하면 그래프 플래그 초기화
         if selected_key != 'Pcb':
              st.session_state.show_pcb_chart = False
     
     # ====================================================
-    # 3. 메인 화면: 선택된 분석 항목 표시 로직
+    # 3. 메인 화면: 선택된 분석 항목 표시 로직 (UI)
     # ====================================================
     
+    # 그래프를 표시할 위치를 확보하는 빈 컨테이너 (이전 위치)
+    chart_placeholder = st.empty() 
+
     key = selected_key
     props = tab_map[key]
     
@@ -150,7 +147,6 @@ def main():
                             st.session_state.sidebar_columns[key] = final_cols
                             st.session_state.field_mapping[key] = final_cols
                             
-                            # 분석 완료 시 차트 플래그 리셋 (새 분석 데이터로 다시 눌러야 표시)
                             st.session_state.show_pcb_chart = False 
                             st.success("분석 완료! 결과가 저장되었습니다.")
                         
@@ -159,20 +155,19 @@ def main():
                 st.error(f"분석 중 오류 발생: {e}")
                 st.session_state.analysis_results[key] = None
 
-        # 분석 결과가 세션 상태에 저장되어 있으면 표시 함수 호출
         if st.session_state.analysis_results.get(key) is not None:
-            # analysis_display.py의 함수 호출: 여기서 필터링된 DF가 세션에 저장됩니다.
             display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
 
     # ==============================
-    # 4. 메인 화면에 그래프 표시 로직 (사이드바 버튼 클릭 시)
+    # 4. 푸터(Footer) 위치에 그래프 표시 로직
     # ==============================
     df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
     
+    # 메인 UI가 끝난 후, 페이지의 가장 마지막에 그래프를 렌더링합니다.
     if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
         
         st.markdown("---")
-        st.header("PCB 테스트 항목별 QC 결과 그래프")
+        st.header("PCB 테스트 항목별 QC 결과 그래프 (Footer)")
         
         try:
             with st.spinner("그래프 생성 중..."):
@@ -183,7 +178,7 @@ def main():
                     st.markdown("---")
                     st.info(f"PCB 데이터 (필터링된 {df_pcb_filtered.shape[0]}건)를 기반으로 그래프가 생성되었습니다.")
                 else:
-                    st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다. PCB 데이터의 형식을 확인하거나 필터를 해제해 주세요.")
+                    st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다.")
         except Exception as e:
             st.error(f"그래프 렌더링 중 오류 발생: {e}")
             st.session_state.show_pcb_chart = False
