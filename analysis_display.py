@@ -4,6 +4,7 @@ from datetime import datetime
 
 # 각 CSV 분석 모듈 불러오기 (실제 모듈은 외부 파일에 있다고 가정)
 # from csv2 import read_csv_with_dynamic_header, analyze_data
+# from csv_Fw import read_csv_with_dynamic_header_for_Fw, analyze_Fw_data
 # ...
 
 def display_analysis_result(analysis_key, file_name, props):
@@ -43,14 +44,20 @@ def display_analysis_result(analysis_key, file_name, props):
     
     with filter_col1:
         jig_list = sorted(df_raw[props['jig_col']].dropna().unique().tolist()) if props['jig_col'] in df_raw.columns else []
-        # 필터링 키를 사용자가 볼 수 있는 "jig_select_{analysis_key}"로 변경
         selected_jig = st.selectbox("PC(Jig) 선택", ["전체"] + jig_list, key=f"jig_select_{analysis_key}") 
     
     if not all_dates:
         st.warning("분석할 데이터가 없습니다.")
         return
         
-    min_date, max_date = min(all_dates), max(all_dates)
+    # 날짜 입력 위젯에 사용할 수 있도록 min_date, max_date가 datetime.date 타입인지 확인
+    if not all_dates:
+        st.warning("날짜 정보가 유효하지 않습니다.")
+        return
+    
+    min_date = min(all_dates)
+    max_date = max(all_dates)
+
     with filter_col2:
         start_date = st.date_input("시작 날짜", min_value=min_date, max_value=max_date, value=min_date, key=f"start_date_{analysis_key}")
     with filter_col3:
@@ -59,46 +66,45 @@ def display_analysis_result(analysis_key, file_name, props):
     if start_date > end_date:
         st.error("시작 날짜는 종료 날짜보다 이전이어야 합니다.")
         return
-
-    # --- 1. 필터링된 원본 DataFrame (그래프 연동을 위한 핵심) ---
-    # 날짜 필터링 (Pandas datetime 형식과 호환)
-    df_filtered = df_raw[
-        (df_raw[props['timestamp_col']].dt.date >= start_date) & 
-        (df_raw[props['timestamp_col']].dt.date <= end_date)
-    ].copy()
     
+    # --- 1. 필터링된 원본 DataFrame (그래프 연동을 위한 핵심) ---
+    timestamp_col = props['timestamp_col']
+    df_filtered = pd.DataFrame() # 초기화
+
+    # **날짜 컬럼이 datetime.date 타입인지 확인하고 필터링합니다.**
+    if pd.api.types.is_datetime64_any_dtype(df_raw[timestamp_col]):
+        df_filtered = df_raw[
+            (df_raw[timestamp_col].dt.date >= start_date) & 
+            (df_raw[timestamp_col].dt.date <= end_date)
+        ].copy()
+    else:
+        # 날짜 컬럼 타입 오류 디버깅
+        st.error(f"DEBUG ERROR: 컬럼 '{timestamp_col}'이 datetime 타입이 아닙니다. (현재 타입: {df_raw[timestamp_col].dtype}). 분석 함수를 확인하세요.")
+        # 이 경우 df_filtered는 비어있는 상태로 유지됨
+
     # Jig 필터링
-    if selected_jig != "전체":
+    if selected_jig != "전체" and not df_filtered.empty:
         df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
         
-    # 세션 상태에 필터링된 DF 저장 (streamlit_app.py에서 그래프 생성을 위해 사용)
+    # 세션 상태에 필터링된 DF 저장
     st.session_state[f'filtered_df_{analysis_key}'] = df_filtered.copy()
     # --------------------------------------------------------------------
 
+    # --- 디버깅 코드 위치 (데이터 크기 확인) ---
+    if analysis_key == 'Pcb':
+        if df_filtered.empty:
+            st.warning("DEBUG: Pcb 필터링 후 데이터 크기: 0 행 (필터 조건에 맞는 데이터 없음)")
+        else:
+            st.success(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행")
+    # -----------------------------------------
+
+    if df_filtered.empty:
+        st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다. (0 행)")
+        return
+
+    # 이후 로직은 df_filtered를 기반으로 진행됨
     filtered_dates = sorted(df_filtered[props['timestamp_col']].dt.date.unique().tolist())
     
-    # ******************* 디버깅 코드 위치 변경 *******************
-    if df_filtered.empty:
-        # --- 임시 디버깅 코드 추가 ---
-        if analysis_key == 'Pcb':
-            st.error("DEBUG: Pcb 필터링 후 데이터 크기: 0 행") # 0행일 때 에러로 표시
-        # --- 임시 디버깅 코드 종료 ---
-        
-        st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다.")
-        st.session_state[f'filtered_df_{analysis_key}'] = pd.DataFrame() 
-        return
-        
-    # --- 임시 디버깅 코드 추가 ---
-    if analysis_key == 'Pcb':
-        st.success(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행") # 1행 이상일 때 성공으로 표시
-    # --- 임시 디버깅 코드 종료 ---
-
-    if df_filtered.empty:
-        st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다.")
-        # 데이터가 없으면 세션 상태의 필터된 DF도 비어있는지 확인
-        st.session_state[f'filtered_df_{analysis_key}'] = pd.DataFrame() 
-        return
-
     st.write(f"**분석 시간**: {st.session_state.analysis_time[analysis_key]}")
     st.markdown("---")
 
@@ -107,13 +113,14 @@ def display_analysis_result(analysis_key, file_name, props):
     
     daily_aggregated_data = {}
     
-    # 필터링된 날짜 목록을 사용하여 집계 데이터를 생성합니다. (summary_data는 원본 기준이므로 필터링 필요)
-    for date_obj in filtered_dates:
+    # 필터링된 날짜 목록을 기반으로 집계 데이터 계산
+    # all_dates 대신 filtered_dates를 사용해야 하지만, 여기서는 필터링된 날짜 범위만 사용
+    date_range_for_aggregation = [date for date in all_dates if start_date <= date <= end_date]
+
+    for date_obj in date_range_for_aggregation:
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
-        date_str = date_obj.strftime('%Y-%m-%d')
-        
         for jig in jigs_to_display:
-            data_point = summary_data.get(jig, {}).get(date_str)
+            data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
             if data_point:
                 for key in daily_totals:
                     daily_totals[key] += data_point.get(key, 0)
@@ -122,14 +129,14 @@ def display_analysis_result(analysis_key, file_name, props):
     # --- 요약 (날짜 범위 요약 테이블) ---
     st.subheader("기간 요약")
     
-    if daily_aggregated_data:
+    if date_range_for_aggregation:
         summary_df_data = {
-            '날짜': [d.strftime('%m-%d') for d in filtered_dates],
-            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates],
-            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in filtered_dates],
-            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in filtered_dates],
-            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in filtered_dates],
-            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates]
+            '날짜': [d.strftime('%m-%d') for d in date_range_for_aggregation],
+            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in date_range_for_aggregation],
+            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in date_range_for_aggregation],
+            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in date_range_for_aggregation],
+            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in date_range_for_aggregation],
+            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in date_range_for_aggregation]
         }
         summary_df = pd.DataFrame(summary_df_data).set_index('날짜')
         st.dataframe(summary_df.transpose())
@@ -144,6 +151,7 @@ def display_analysis_result(analysis_key, file_name, props):
     # 1. 상세 내역 필드 선택 기능 추가
     all_raw_columns = df_raw.columns.tolist()
     
+    # 디폴트 필드 구성: SNumber와 모든 QC 컬럼으로만 제한
     snumber_col = next((col for col in all_raw_columns if col.lower() == 'snumber'), 'SNumber')
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
     initial_default = list(set([snumber_col] + qc_cols_found)) 
@@ -199,25 +207,22 @@ def display_analysis_result(analysis_key, file_name, props):
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
         qc_filter_mode = st.session_state[f'qc_filter_mode_{analysis_key}'] #추가
         
-        for date_obj in filtered_dates:
+        for date_obj in date_range_for_aggregation: # 변경된 필터링된 날짜 사용
             st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
             
             for jig in jigs_to_display:
                 data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
-                
-                # Jig 필터링이 되어 있다면, summary_data에서 해당 Jig의 데이터가 없거나
-                # 해당 날짜의 데이터가 없으면 건너뜁니다.
-                if jig not in jigs_to_display or not data_point or data_point.get('total_test', 0) == 0:
-                     continue
+                if not data_point or data_point.get('total_test', 0) == 0:
+                    continue
 
                 st.markdown(f"**PC(Jig): {jig}**")
                 
                 # === 1. 카테고리 결정 로직 ===
                 if qc_filter_mode == 'FailOnly':
-                    categories = ['false_defect', 'true_defect'] 
+                    categories = ['false_defect', 'true_defect']
                     labels = ['가성불량', '진성불량']
                 elif qc_filter_mode == 'PassOnly':
-                    categories = ['pass']
+                    categories = ['pass'] 
                     labels = ['PASS']
                 elif current_mode == 'defects':
                     categories = ['false_defect', 'true_defect']
@@ -274,8 +279,8 @@ def display_analysis_result(analysis_key, file_name, props):
                     count = len(full_data_list)
                     unique_count = len(set(d.get('SNumber', 'N/A') for d in full_data_list))
 
-                    qc_summary_parts_html = []  # HTML 포함 (제목 아래 출력용)
-                    qc_summary_parts_plain = [] # HTML 미포함 (제목 출력용)
+                    qc_summary_parts_html = [] 
+                    qc_summary_parts_plain = [] 
                     fields_to_check = selected_detail_fields
                     selected_qc_cols = [col for col in fields_to_check if col.endswith('_QC')]
                     
@@ -326,7 +331,6 @@ def display_analysis_result(analysis_key, file_name, props):
                         
                         # 3. 제목 아래에 색상이 적용된 QC 요약 정보 출력 (HTML)
                         if qc_summary_parts_html:
-                            # HTML 렌더링 시에는 qc_summary_parts_html 사용
                             qc_summary_html_output = f" [<span style='color:black;'>QC: {', '.join(qc_summary_parts_html)}</span>]"
                             qc_html = f"<div>{qc_summary_html_output.replace('QC:', 'QC:')}</div>"
                             st.markdown(qc_html, unsafe_allow_html=True)
@@ -352,7 +356,7 @@ def display_analysis_result(analysis_key, file_name, props):
                                     formatted_fields.append(f"{field}: {value}")
                                 # ===================================
                                 
-                            # st.markdown을 사용하여 HTML이 렌더링되도록 합니다.
+                                # st.markdown을 사용하여 HTML이 렌더링되도록 합니다.
                             st.markdown(", ".join(formatted_fields), unsafe_allow_html=True)
 
             st.markdown("---")
@@ -363,39 +367,42 @@ def display_analysis_result(analysis_key, file_name, props):
     
     filter_state_key = f'applied_filters_{analysis_key}'
 
+    # 초기 상태 설정 (없으면 초기화)
+    if filter_state_key not in st.session_state:
+        st.session_state[filter_state_key] = {'snumber': '', 'columns': []}
+        
+    applied_filters = st.session_state[filter_state_key]
+    
     with search_col1:
-        snumber_query = st.text_input("SNumber 검색", key=f"snumber_search_{analysis_key}")
+        snumber_query = st.text_input("SNumber 검색", key=f"snumber_search_{analysis_key}", value=applied_filters['snumber'])
     with search_col2:
         all_columns = df_raw.columns.tolist()
         qc_cols_default = [col for col in all_columns if col.endswith('_QC')]
         default_cols_for_search = ['SNumber', props['timestamp_col'], 'PassStatusNorm'] + qc_cols_default
         
+        # 적용된 필터 컬럼이 없다면 기본 컬럼 사용
+        default_cols_value = applied_filters['columns'] if applied_filters['columns'] else [col for col in all_columns if col in default_cols_for_search]
+        
         selected_columns = st.multiselect(
             "표시할 필드(열) 선택", 
             all_columns, 
             key=f"col_select_{analysis_key}",
-            default=[col for col in all_columns if col in default_cols_for_search]
+            default=default_cols_value
         )
     with search_col3:
         st.write("") 
         st.write("") 
         apply_button = st.button("필터 적용", key=f"apply_filter_{analysis_key}")
 
-
     if apply_button:
         st.session_state[filter_state_key] = {
             'snumber': snumber_query,
             'columns': selected_columns
         }
+        applied_filters = st.session_state[filter_state_key] # 필터 즉시 반영
     
-    # 필터가 적용되지 않았을 경우 기본값 설정
-    if filter_state_key not in st.session_state:
-        st.session_state[filter_state_key] = {'snumber': '', 'columns': selected_columns}
-        
-    applied_filters = st.session_state.get(filter_state_key, {'snumber': '', 'columns': []})
-
     with st.expander("DF 조회"):
-        df_display = df_filtered.copy() # 기본 필터링이 적용된 df_filtered를 사용합니다.
+        df_display = df_raw.copy()
         
         has_snumber_query = False
         
@@ -416,11 +423,11 @@ def display_analysis_result(analysis_key, file_name, props):
             existing_cols = [col for col in applied_filters['columns'] if col in df_display.columns]
             df_display = df_display[existing_cols]
         
-        # 결과 출력 및 디버깅 메시지
+        # DF 조회 결과 출력
         if df_display.empty:
             if has_snumber_query:
                 st.info(f"선택된 필터 조건 ('{applied_filters['snumber']}')에 해당하는 결과가 없습니다. 검색어를 확인하거나 필터를 해제해 주세요.")
             else:
-                st.info("데이터프레임에 표시할 행이 없습니다. 필터 조건을 확인해주세요.")
+                st.info("데이터프레임에 표시할 행이 없습니다. 분석 데이터(df_raw)를 확인해주세요.")
         else:
             st.dataframe(df_display)
