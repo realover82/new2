@@ -38,7 +38,7 @@ def main():
     st.title("리모컨 생산 데이터 분석 툴 [Header]")
     st.markdown("---")
 
-    # 세션 상태 초기화 (생략)
+    # 세션 상태 초기화
     for state_key in ['analysis_results', 'uploaded_files', 'analysis_data', 'analysis_time']:
         if state_key not in st.session_state:
             st.session_state[state_key] = {k: None for k in ANALYSIS_KEYS}
@@ -126,6 +126,18 @@ def main():
     # --- 그래프 출력 위치 (Main Content 상단) ---
     df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
     
+    # --- 디버깅 섹션: 그래프가 왜 안 보이는지 확인 ---
+    if st.session_state.show_pcb_chart:
+        if df_pcb_filtered is not None and not df_pcb_filtered.empty:
+            st.error("디버깅 상태: [그래프 출력 로직 시작]") # 이 메시지가 나와야 그래프가 보임
+        else:
+            st.warning("디버깅 상태: [그래프 출력 조건 미달성] - 필터링된 데이터가 비어 있습니다.")
+    else:
+        st.info("디버깅 상태: [그래프 출력 조건 미달성] - '그래프 보기' 버튼이 눌러지지 않았습니다.")
+    st.markdown("---")
+    # -----------------------------------------------
+
+    
     if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
         
         st.markdown("---")
@@ -146,7 +158,6 @@ def main():
             st.session_state.show_pcb_chart = False
             
     st.markdown("---") 
-    # -----------------------------------------------
 
     st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
     
