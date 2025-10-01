@@ -197,11 +197,14 @@ def main():
     df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
     
     if st.session_state.show_summary_table:
+        
+        # 데이터 유효성 검사 강화
         if df_pcb_filtered is not None and not df_pcb_filtered.empty:
             generate_dynamic_summary_table(df_pcb_filtered) # 동적 테이블 생성
         else:
+            # 데이터가 비어 있을 경우, 플래그를 해제하고 사용자에게 안내
             st.warning("테이블을 생성하려면 '파일 Pcb 분석'에서 데이터를 로드하고 필터링된 결과가 1건 이상 있어야 합니다.")
-            st.session_state.show_summary_table = False # 데이터 없으면 플래그 해제
+            st.session_state.show_summary_table = False # 플래그 해제 (버튼 재표시 유도)
             
     st.markdown("---") 
     # -----------------------------------------------
