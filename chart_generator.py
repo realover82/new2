@@ -55,26 +55,25 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     chart_bar = base.mark_bar()
     
     # 3. 텍스트 (Text) 레이어 생성
-    # [핵심 수정]: 텍스트 레이블은 별도의 인코딩을 사용하지 않고, base 인코딩을 오버라이드합니다.
-    chart_text = base.mark_text(
-        align='center',
-        baseline='bottom',
-        dy=-5 # 막대 위에 약간 띄우기
-    ).encode(
-        # Y축을 합계로 설정하여 막대 위에 텍스트를 배치합니다.
+    chart_text = alt.Chart(df_long).encode(
+        # X축을 Test로 설정 (Bar 차트와 동일)
+        x=alt.X('Test', sort=None),
         y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
         text=alt.Text('sum(Count)', format=',.0f'),
-        color=alt.value('black'), # 텍스트 색상 고정
-        # Status 색상 인코딩은 텍스트에서 제거합니다.
-        color=alt.value('black'), 
-        tooltip=['sum(Count):Q'] # 툴팁은 간략하게
+        color=alt.value('black') # 텍스트 색상 고정
+    ).mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5
     ).transform_aggregate(
         total_count='sum(Count)',
         groupby=['Test'] # Test 항목별로만 합산합니다.
     )
 
+    # --- DEBUG 3: 최종 차트 레이어링 ---
+    st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
+    
     # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    # [수정] Y축 제목이 겹치지 않도록 차트에서만 Y축 제목을 남기고 텍스트에서는 제거합니다.
     layered_chart = alt.layer(
         chart_bar, 
         chart_text
@@ -82,7 +81,7 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         y='independent'
     ).interactive()
     
-    # 5. 합쳐진 레이어에 Date와 Test 항목별 패싯(분할) 적용
+    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
     final_chart = layered_chart.facet(
         column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
     )
