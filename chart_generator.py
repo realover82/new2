@@ -6,7 +6,7 @@ import streamlit as st
 def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
     QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
-    [수정됨]: Altair 레이어링 오류를 해결하고 차트를 안정화했습니다.
+    [수정됨]: 텍스트 레이어의 불필요한 transform_aggregate 제거로 렌더링 오류 해결.
     """
     if summary_df.empty:
         st.warning("Chart Debug: 입력 summary_df가 비어있습니다. 차트 생성 불가.")
@@ -65,10 +65,8 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         align='center',
         baseline='bottom',
         dy=-5
-    ).transform_aggregate(
-        total_count='sum(Count)',
-        groupby=['Test'] # Test 항목별로만 합산합니다.
     )
+    # [핵심 수정]: transform_aggregate 제거. Y축 합산은 인코딩에서 처리합니다.
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
     st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
