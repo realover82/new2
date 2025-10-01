@@ -11,13 +11,11 @@ from df_search import display_df_search
 def display_analysis_result(analysis_key: str, file_name: str, props: Dict[str, str]):
     """
     세션 상태에 저장된 분석 결과를 Streamlit에 표시하는 메드인 함수입니다.
-    이 함수는 필터링 로직을 건너뛰고 원본 데이터를 기준으로 UI를 구성합니다.
     """
     
     # 1. 초기 유효성 검사 및 데이터 추출
     validation_result = check_initial_validity(analysis_key, props)
     if validation_result:
-        # 오류 메시지가 있으면 출력하고 종료
         st.error(validation_result)
         return
 
@@ -27,23 +25,24 @@ def display_analysis_result(analysis_key: str, file_name: str, props: Dict[str, 
     
     st.markdown(f"### '{file_name}' 분석 리포트")
     
-    # 2. 필터링 UI 설정 (로직은 비활성화)
-    selected_jig, start_date, end_date = setup_filtering_ui(analysis_key, df_raw, all_dates, props)
+    # 2. 필터링 UI 설정 및 필터링된 DF 획득
+    # [수정] 반환값에 df_filtered_from_ui 추가
+    selected_jig, start_date, end_date, df_filtered_from_ui = setup_filtering_ui(analysis_key, df_raw, all_dates, props)
     
-    # === 핵심 수정: 필터링 로직 건너뛰기 ===
-    df_filtered = df_raw.copy() # 원본 데이터를 그대로 사용
+    # === 핵심 수정: UI에서 필터링된 DF를 세션에 저장 및 검증 ===
+    df_filtered = df_filtered_from_ui.copy()
     
-    # Jig 필터링만 적용 (요약/상세 내역 집계에만 영향)
+    # Jig 필터링을 위한 리스트
     jigs_to_display = [selected_jig] if selected_jig != "전체" else sorted(df_raw[props['jig_col']].dropna().unique().tolist())
     
-    # 세션 상태에 필터링된 DF 저장 (원본 데이터가 저장됨)
+    # 세션 상태에 필터링된 DF 저장
     st.session_state[f'filtered_df_{analysis_key}'] = df_filtered.copy()
     # ======================================
     
-    # --- 최종 상태 확인 (테이블 강제 표시를 위한 디버깅) ---
+    # --- 최종 상태 확인 ---
     if analysis_key == 'Pcb':
         if df_filtered.empty:
-            st.error("DEBUG FINAL: 원본 데이터가 비어있습니다. 테이블 생성 불가.")
+            st.error("DEBUG FINAL: 필터링된 DF가 최종적으로 비어있습니다. 테이블/그래프 생성 불가.")
             st.session_state['show_summary_table'] = False 
             return
         else:

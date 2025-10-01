@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, Any, Tuple, List, Optional
 
 def check_initial_validity(analysis_key: str, props: Dict[str, str]) -> Optional[str]:
@@ -28,12 +28,11 @@ def check_initial_validity(analysis_key: str, props: Dict[str, str]) -> Optional
         
     return None
 
-def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[datetime.date], props: Dict[str, str]) -> Tuple[str, datetime.date, datetime.date]:
+def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[date], props: Dict[str, str]) -> Tuple[str, date, date, pd.DataFrame]:
     """
-    기본 필터링 UI를 설정하고 사용자의 선택을 반환합니다.
-    필터링 로직은 이 함수 내에서 데이터를 변경하지 않습니다.
+    기본 필터링 UI를 설정하고 사용자의 선택 및 필터링된 DF를 반환합니다.
     """
-    st.subheader("기본 필터링 (필터링 로직 전체 비활성화)")
+    st.subheader("기본 필터링") # [수정] 필터링 비활성화 문구 제거
     
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     
@@ -52,6 +51,33 @@ def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[
     if start_date > end_date:
         st.error("시작 날짜는 종료 날짜보다 이전이어야 합니다.")
         # 오류 발생 시 기본값 반환
-        return selected_jig, min_date, max_date
+        return selected_jig, min_date, max_date, pd.DataFrame()
         
-    return selected_jig, start_date, end_date
+    # === 핵심 로직: 실제 필터링 수행 ===
+    df_filtered = df_raw.copy()
+    timestamp_col = props['timestamp_col']
+    
+    try:
+        # 날짜 컬럼이 datetime.date 타입이 아닐 경우 강제 변환 후 필터링
+        df_temp = df_filtered.copy()
+        df_temp['__DATE_TEMP__'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
+        df_temp = df_temp.dropna(subset=['__DATE_TEMP__'])
+
+        df_filtered = df_temp[
+            (df_temp['__DATE_TEMP__'] >= start_date) & 
+            (df_temp['__DATE_TEMP__'] <= end_date)
+        ].copy()
+
+        # Jig 필터링
+        if selected_jig != "전체":
+            df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
+        
+        # 임시 컬럼 제거 및 최종 반환
+        if '__DATE_TEMP__' in df_filtered.columns:
+            df_filtered = df_filtered.drop(columns=['__DATE_TEMP__'])
+
+    except Exception as e:
+        st.error(f"DEBUG ERROR: 필터링 중 오류 발생. 분석 함수 확인 필요. ({e})")
+        df_filtered = pd.DataFrame() # 오류 시 빈 DF 반환
+
+    return selected_jig, start_date, end_date, df_filtered
