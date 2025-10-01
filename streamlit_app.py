@@ -37,7 +37,8 @@ def generate_dynamic_summary_table(df: pd.DataFrame):
         return
 
     # 1. QC 컬럼 식별
-    qc_columns = [col for col in df.columns if df[col].dtype == object and col.endswith('_QC')] # object 타입이면서 _QC로 끝나는 컬럼만 선택
+    # 문자열 타입이면서 _QC로 끝나는 컬럼만 선택 (QC 상태 코드 확인용)
+    qc_columns = [col for col in df.columns if df[col].dtype == object and col.endswith('_QC')] 
     if not qc_columns:
         st.warning("데이터에서 '_QC'로 끝나는 품질 관리 컬럼(문자열 타입)을 찾을 수 없습니다.")
         return
@@ -198,12 +199,12 @@ def main():
     
     if st.session_state.show_summary_table:
         
-        # 데이터 유효성 검사 (analysis_main에서 필터링을 제거했기 때문에 이 검사는 원본 DF 검사와 동일)
+        # 데이터 유효성 검사 (analysis_main에서 필터링된 DF를 사용함)
         if df_pcb_filtered is not None and not df_pcb_filtered.empty:
             generate_dynamic_summary_table(df_pcb_filtered) # 동적 테이블 생성
         else:
-            # 이 에러 메시지는 'Pcb 분석 실행' 자체가 실패했을 때만 나옵니다.
-            st.error("테이블 생성 실패: 원본 PCB 데이터가 로드되지 않았거나 비어 있습니다. 'Pcb 분석 실행'을 확인하세요.")
+            # 이 에러 메시지는 'Pcb 분석 실행' 자체가 실패했거나 필터링 결과 0건일 때 나옵니다.
+            st.error("테이블 생성 실패: 필터링된 PCB 데이터가 없거나 비어 있습니다. 'Pcb 분석 실행'을 확인하고 필터(날짜/Jig)를 해제해보세요.")
             st.session_state.show_summary_table = False # 플래그 해제 (버튼 재표시 유도)
             
     st.markdown("---") 

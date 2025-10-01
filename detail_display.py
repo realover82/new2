@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
+from datetime import date
 
-# analysis_main.py에서 저장된 dates를 사용하도록 수정 필요
-# from aggregation_logic import aggregate_and_display_summary
-
-def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data: Dict, all_dates: List, jigs_to_display: List[str]):
+def display_detail_section(analysis_key: str, df_filtered: pd.DataFrame, summary_data: Dict, all_dates: List[date], jigs_to_display: List[str]):
     """
     상세 내역 섹션의 UI 및 데이터 표시를 담당합니다.
+    df_filtered: analysis_utils에서 날짜/Jig 필터링을 거친 실제 데이터프레임입니다.
     """
     st.subheader("상세 내역 (일별)")
     
     # 1. 상세 내역 필드 선택 기능 추가
-    all_raw_columns = df_raw.columns.tolist()
+    all_raw_columns = df_filtered.columns.tolist()
     
     snumber_col = next((col for col in all_raw_columns if col.lower() == 'snumber'), 'SNumber')
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
@@ -33,45 +32,46 @@ def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data
     if st.button("상세 내역 조회", key=f"show_details_btn_{analysis_key}"):
         st.session_state[f'show_details_{analysis_key}'] = True
         st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
-        st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' 
+        st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' # 필터 모드 초기화
+
 
     if st.session_state[f'show_details_{analysis_key}']:
         if f'detail_mode_{analysis_key}' not in st.session_state:
             st.session_state[f'detail_mode_{analysis_key}'] = 'all'
 
-        detail_col1, detail_col2, detail_col3, detail_col4, detail_col5 = st.columns(5) 
+        detail_col1, detail_col2, detail_col3, detail_col4, detail_col5 = st.columns(5) # 5개의 컬럼으로 확장
         
         with detail_col1:
             if st.button("전체 보기", key=f"detail_all_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'all'
-                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
         with detail_col2:
             if st.button("불량만 보기", key=f"detail_defects_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'defects'
-                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
         with detail_col3:
             if st.button("PASS만 보기", key=f"detail_pass_{analysis_key}"):
                 st.session_state[f'detail_mode_{analysis_key}'] = 'pass'
-                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None'
+                st.session_state[f'qc_filter_mode_{analysis_key}'] = 'None' #추가
                 
         # === 새로운 필터 버튼 추가 ===
         with detail_col4:
             if st.button("불량(초과,미달만)", key=f"filter_qc_fail_{analysis_key}"):
                 st.session_state[f'qc_filter_mode_{analysis_key}'] = 'FailOnly'
-                st.session_state[f'detail_mode_{analysis_key}'] = 'all' 
+                st.session_state[f'detail_mode_{analysis_key}'] = 'all' # 전체 모드에서 필터링
         with detail_col5:
             if st.button("PASS(초과,미달만)", key=f"filter_qc_pass_{analysis_key}"):
                 st.session_state[f'qc_filter_mode_{analysis_key}'] = 'PassOnly'
-                st.session_state[f'detail_mode_{analysis_key}'] = 'all' 
+                st.session_state[f'detail_mode_{analysis_key}'] = 'all' # 전체 모드에서 필터링
         # =============================     
         
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
-        qc_filter_mode = st.session_state[f'qc_filter_mode_{analysis_key}'] 
+        qc_filter_mode = st.session_state[f'qc_filter_mode_{analysis_key}'] #추가
         
-        # aggregate_logic에서 생성된 날짜 목록을 가져오거나, 없다면 전체 날짜를 사용합니다.
+        # aggregation_logic에서 생성된 날짜 목록을 가져옵니다. (필터 반영된 날짜)
         date_range_for_display = st.session_state.get(f'agg_dates_{analysis_key}', all_dates)
         
-        for date_obj in date_range_for_display: 
+        for date_obj in date_range_for_display: # 변경된 필터링된 날짜 사용
             st.markdown(f"**{date_obj.strftime('%Y-%m-%d')}**")
             
             for jig in jigs_to_display:
@@ -97,6 +97,7 @@ def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data
                 else: 
                     categories = ['pass', 'false_defect', 'true_defect', 'fail']
                     labels = ['PASS', '가성불량', '진성불량', 'FAIL']
+
                 # ============================================================
 
                 for cat, label in zip(categories, labels):
@@ -120,17 +121,20 @@ def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data
                                 for qc_col in selected_qc_cols_for_filter:
                                     qc_value = record.get(qc_col)
                                     
+                                    # 조건 1: '불량(초과,미달만)' 버튼을 눌렀을 경우
                                     if qc_filter_mode == 'FailOnly' and qc_value in target_statuses:
                                         qc_value_found = True
                                         break
+                                    # 조건 2: 'PASS(초과,미달만)' 버튼을 눌렀을 경우
                                     elif qc_filter_mode == 'PassOnly' and cat == 'pass' and qc_value in target_statuses:
+                                        # PASS 카테고리 AND QC 미달/초과인 경우만 필터링
                                         qc_value_found = True
                                         break
                                     
                                 if qc_value_found:
                                     filtered_list.append(record)
                             
-                            full_data_list = filtered_list 
+                            full_data_list = filtered_list # 필터링된 리스트로 교체
 
                     if not full_data_list:
                         continue
@@ -153,21 +157,24 @@ def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data
                         parts_html = []
                         parts_plain = []
                         
+                        # --- HTML 및 Plain Text 구성 로직 ---
                         if qc_counts.get('Pass', 0) > 0: parts_html.append(f"Pass {qc_counts['Pass']}건"); parts_plain.append(f"Pass {qc_counts['Pass']}건")
                         if qc_counts.get('제외', 0) > 0: parts_html.append(f"제외 {qc_counts['제외']}건"); parts_plain.append(f"제외 {qc_counts['제외']}건")
                         if qc_counts.get('데이터 부족', 0) > 0: parts_html.append(f"데이터 부족 {qc_counts['데이터 부족']}건"); parts_plain.append(f"데이터 부족 {qc_counts['데이터 부족']}건")
                             
+                        # 미달/초과 (빨간색 적용 / Plain Text)
                         if qc_counts.get('미달', 0) > 0: parts_html.append(f"<span style='color:red;'>미달 {qc_counts['미달']}건</span>"); parts_plain.append(f"미달 {qc_counts['미달']}건")
                         if qc_counts.get('초과', 0) > 0: parts_html.append(f"<span style='color:red;'>초과 {qc_counts['초과']}건</span>"); parts_plain.append(f"초과 {qc_counts['초과']}건")
                         
-                        if parts_plain: 
+                        if parts_plain: # 순수 텍스트가 있어야만 집계함
                             qc_summary_parts_html.append(f"**{qc_col.replace('_QC', '')}**: {', '.join(parts_html)}")
                             qc_summary_parts_plain.append(f"{qc_col.replace('_QC', '')}: {', '.join(parts_plain)}")
+                        # --- HTML 및 Plain Text 구성 로직 끝 ---
 
                     # 1. 제목에 들어갈 순수한 텍스트 QC 요약 구성
                     qc_summary_plain_text = ""
                     if qc_summary_parts_plain:
-                        qc_summary_plain_text = f" [QC: {', '.join(qc_summary_parts_plain)}]" 
+                        qc_summary_plain_text = f" [QC: {', '.join(qc_summary_parts_plain)}]" # 제목에 들어갈 내용
                         
                     # 2. Expander 제목 구성 (순수 텍스트)
                     expander_title_base = f"{label} - {count}건 (중복값제거 SN: {unique_count}건){qc_summary_plain_text}"
@@ -193,11 +200,15 @@ def display_detail_section(analysis_key: str, df_raw: pd.DataFrame, summary_data
                             for field in fields_to_display:
                                 value = item.get(field, 'N/A')
                                 
+                                # === 개별 항목 빨간색 적용 로직 ===
                                 if field.endswith('_QC') and value in ['미달', '초과']:
+                                    # QC 결과가 '미달' 또는 '초과'일 때 빨간색으로 감쌉니다.
                                     formatted_fields.append(f"{field}: <span style='color:red;'>{value}</span>")
                                 else:
                                     formatted_fields.append(f"{field}: {value}")
+                                # ===================================
                                 
+                                # st.markdown을 사용하여 HTML이 렌더링되도록 합니다.
                             st.markdown(", ".join(formatted_fields), unsafe_allow_html=True)
 
             st.markdown("---")

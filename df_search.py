@@ -11,6 +11,7 @@ def display_df_search(analysis_key: str, df_filtered: pd.DataFrame, props: Dict[
     
     filter_state_key = f'applied_filters_{analysis_key}'
 
+    # 초기 상태 설정 (없으면 초기화)
     if filter_state_key not in st.session_state:
         st.session_state[filter_state_key] = {'snumber': '', 'columns': []}
         
@@ -23,6 +24,7 @@ def display_df_search(analysis_key: str, df_filtered: pd.DataFrame, props: Dict[
         qc_cols_default = [col for col in all_columns if col.endswith('_QC')]
         default_cols_for_search = ['SNumber', props['timestamp_col'], 'PassStatusNorm'] + qc_cols_default
         
+        # 적용된 필터 컬럼이 없다면 기본 컬럼 사용
         default_cols_value = applied_filters['columns'] if applied_filters['columns'] else [col for col in all_columns if col in default_cols_for_search]
         
         selected_columns = st.multiselect(
@@ -41,10 +43,10 @@ def display_df_search(analysis_key: str, df_filtered: pd.DataFrame, props: Dict[
             'snumber': snumber_query,
             'columns': selected_columns
         }
-        applied_filters = st.session_state[filter_state_key] 
+        applied_filters = st.session_state[filter_state_key] # 필터 즉시 반영
     
     with st.expander("DF 조회"):
-        df_display = df_filtered.copy() 
+        df_display = df_filtered.copy() # df_raw 대신 필터링된 df_filtered 사용
         
         has_snumber_query = False
         
@@ -65,10 +67,11 @@ def display_df_search(analysis_key: str, df_filtered: pd.DataFrame, props: Dict[
             existing_cols = [col for col in applied_filters['columns'] if col in df_display.columns]
             df_display = df_display[existing_cols]
         
+        # DF 조회 결과 출력
         if df_display.empty:
             if has_snumber_query:
-                st.info(f"선택된 필터 조건 ('{applied_filters['snumber']}')에 해당하는 결과가 없습니다.")
+                st.info(f"선택된 필터 조건 ('{applied_filters['snumber']}')에 해당하는 결과가 없습니다. 검색어를 확인하거나 필터를 해제해 주세요.")
             else:
-                st.info("데이터프레임에 표시할 행이 없습니다.")
+                st.info("데이터프레임에 표시할 행이 없습니다. 분석 데이터(df_raw)를 확인해주세요.")
         else:
             st.dataframe(df_display)

@@ -31,8 +31,9 @@ def check_initial_validity(analysis_key: str, props: Dict[str, str]) -> Optional
 def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[date], props: Dict[str, str]) -> Tuple[str, date, date, pd.DataFrame]:
     """
     기본 필터링 UI를 설정하고 사용자의 선택 및 필터링된 DF를 반환합니다.
+    이 함수에서 날짜 및 Jig 필터링이 실제로 수행됩니다.
     """
-    st.subheader("기본 필터링") # [수정] 필터링 비활성화 문구 제거
+    st.subheader("기본 필터링") 
     
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     
@@ -50,7 +51,7 @@ def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[
 
     if start_date > end_date:
         st.error("시작 날짜는 종료 날짜보다 이전이어야 합니다.")
-        # 오류 발생 시 기본값 반환
+        # 오류 발생 시 빈 DataFrame 반환
         return selected_jig, min_date, max_date, pd.DataFrame()
         
     # === 핵심 로직: 실제 필터링 수행 ===
@@ -58,26 +59,39 @@ def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[
     timestamp_col = props['timestamp_col']
     
     try:
-        # 날짜 컬럼이 datetime.date 타입이 아닐 경우 강제 변환 후 필터링
+        # 날짜 컬럼을 강제 변환 후 필터링을 시도합니다.
         df_temp = df_filtered.copy()
         df_temp['__DATE_TEMP__'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
-        df_temp = df_temp.dropna(subset=['__DATE_TEMP__'])
+        
+        # DEBUG 1: 원본 데이터 로드 후 필터링 전 행 수
+        if analysis_key == 'Pcb':
+            st.info(f"DEBUG 0: 원본 데이터 로드됨 (총 행 수: {df_raw.shape[0]})")
+        
+        # 날짜 변환 실패(NaT)한 행 제거
+        df_temp = df_temp.dropna(subset=['__DATE_TEMP__']) 
 
         df_filtered = df_temp[
             (df_temp['__DATE_TEMP__'] >= start_date) & 
             (df_temp['__DATE_TEMP__'] <= end_date)
         ].copy()
+        
+        # DEBUG 1: 날짜 필터링 후 확인
+        if analysis_key == 'Pcb':
+            st.info(f"DEBUG 1: 날짜 필터링 후 행 수: {df_filtered.shape[0]} ({start_date} ~ {end_date})")
 
         # Jig 필터링
-        if selected_jig != "전체":
+        if selected_jig != "전체" and not df_filtered.empty:
             df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
+            # DEBUG 2: Jig 필터링 후 확인
+            if analysis_key == 'Pcb':
+                 st.info(f"DEBUG 2: Jig 필터링 후 행 수: {df_filtered.shape[0]} (Jig: {selected_jig})")
         
         # 임시 컬럼 제거 및 최종 반환
         if '__DATE_TEMP__' in df_filtered.columns:
             df_filtered = df_filtered.drop(columns=['__DATE_TEMP__'])
 
     except Exception as e:
-        st.error(f"DEBUG ERROR: 필터링 중 오류 발생. 분석 함수 확인 필요. ({e})")
+        st.error(f"DEBUG ERROR: 필터링 중 심각한 오류 발생. 분석 함수 확인 필요. ({e})")
         df_filtered = pd.DataFrame() # 오류 시 빈 DF 반환
 
     return selected_jig, start_date, end_date, df_filtered
