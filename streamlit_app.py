@@ -41,22 +41,33 @@ def main():
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     # ======================================================== 
 
-    # 탭 정의 (그래프 탭은 PCB 데이터 전용으로 가정하고 이름을 변경)
+    # 탭 정의 (총 6개의 탭 생성)
     tab_names = [f"파일 {key} 분석" for key in ANALYSIS_KEYS] + ["PCB QC 요약 그래프"]
     tabs = st.tabs(tab_names)
     
+    # === 수정된 부분: 탭 인스턴스를 명시적으로 할당합니다. ===
+    
+    # 탭 이름 리스트에서 순서대로 탭 인스턴스 추출
+    tab_instances = {
+        'Pcb': tabs[0],
+        'Fw': tabs[1],
+        'RfTx': tabs[2],
+        'Semi': tabs[3],
+        'Batadc': tabs[4],
+    }
+    chart_tab = tabs[5] # 그래프 탭은 마지막 인덱스 (5)
+
     # 탭 속성과 분석 함수를 결합한 최종 맵
     tab_map = {
-        'Pcb': {**TAB_PROPS_MAP['Pcb'], 'tab': tabs[0], 'reader': read_csv_with_dynamic_header, 'analyzer': analyze_data},
-        'Fw': {**TAB_PROPS_MAP['Fw'], 'tab': tabs[1], 'reader': read_csv_with_dynamic_header_for_Fw, 'analyzer': analyze_Fw_data},
-        'RfTx': {**TAB_PROPS_MAP['RfTx'], 'tab': tabs[2], 'reader': read_csv_with_dynamic_header_for_RfTx, 'analyzer': analyze_RfTx_data},
-        'Semi': {**TAB_PROPS_MAP['Semi'], 'tab': tabs[3], 'reader': read_csv_with_dynamic_header_for_Semi, 'analyzer': analyze_Semi_data},
-        'Batadc': {**TAB_PROPS_MAP['Batadc'], 'tab': tabs[4], 'reader': read_csv_with_dynamic_header_for_Batadc, 'analyzer': analyze_Batadc_data}
+        key: {
+            **TAB_PROPS_MAP[key], 
+            'tab': tab_instances[key], # 할당된 탭 인스턴스 사용
+            'reader': globals()[f"read_csv_with_dynamic_header_for_{key}"] if key != 'Pcb' else read_csv_with_dynamic_header,
+            'analyzer': globals()[f"analyze_{key}_data"] if key != 'Pcb' else analyze_data
+        }
+        for key in ANALYSIS_KEYS
     }
     
-    # 그래프 탭은 마지막 인덱스
-    chart_tab = tabs[5] 
-
     # === 사이드바 컬럼 목록 표시 ===
     st.sidebar.title("현재 데이터 컬럼")
     for key in ANALYSIS_KEYS:
@@ -108,6 +119,8 @@ def main():
                         st.success("분석 완료! 결과가 저장되었습니다.")
                         
                     except Exception as e:
+                        # 디버깅을 위해 오류 메시지를 콘솔에도 출력
+                        print(f"Error during {key} analysis: {e}") 
                         st.error(f"분석 중 오류 발생: {e}")
                         st.session_state.analysis_results[key] = None
 
@@ -125,11 +138,13 @@ def main():
         
         df_pcb = st.session_state.analysis_results.get('Pcb')
         
+        # 'PCB QC 요약 그래프 생성' 버튼 표시 조건 확인
         if df_pcb is None or df_pcb.empty:
             st.warning("그래프를 생성하려면 '파일 Pcb 분석' 탭에서 CSV 파일을 로드하고 '분석 실행'을 먼저 완료해야 합니다.")
         else:
+            # 이 else 블록이 실행되면 버튼이 나타나야 합니다.
             # 버튼을 눌러 그래프 생성 함수 호출
-            if st.button("PCB QC 요약 그래프 생성"):
+            if st.button("PCB QC 요약 그래프 생성", key='generate_pcb_chart'): # key 추가
                 with st.spinner("그래프 생성 중..."):
                     # 실제 분석된 PCB 데이터(df_pcb)와 키('Pcb')를 차트 생성 함수에 전달
                     chart_figure = create_stacked_bar_chart(df_pcb, 'PCB')
