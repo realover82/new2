@@ -96,21 +96,20 @@ def display_analysis_result(analysis_key, file_name, props):
 
     # 이후 로직은 df_filtered(원본 DF)를 기반으로 진행됨
     
-    # 날짜 집계는 UI에서 선택된 날짜 범위 (filtered_dates)와 Jig (jigs_to_display)를 사용
-    filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
+    # === 필터링 로직 수정: UI 필터와 상관없이 원본 전체 날짜 사용 ===
+    filtered_dates_ui = [date for date in all_dates if start_date <= date <= end_date] # UI 표시용
+    date_range_for_aggregation = all_dates # 집계 및 상세 내역은 전체 날짜 사용
     
     st.write(f"**분석 시간**: {st.session_state.analysis_time[analysis_key]}")
     st.markdown("---")
 
     # --- 데이터 집계 ---
-    # 요약 테이블과 상세 내역은 사용자가 UI에서 선택한 필터(Jig, 날짜)를 따릅니다.
+    # 요약 테이블과 상세 내역은 사용자가 UI에서 선택한 필터(Jig)를 따릅니다.
     jigs_to_display = jig_list if selected_jig == "전체" else [selected_jig]
     
     daily_aggregated_data = {}
     
-    date_range_for_aggregation = filtered_dates # UI 필터에 맞는 날짜만 사용
-
-    for date_obj in date_range_for_aggregation:
+    for date_obj in date_range_for_aggregation: 
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
         for jig in jigs_to_display:
             data_point = summary_data.get(jig, {}).get(date_obj.strftime('%Y-%m-%d'))
@@ -122,20 +121,21 @@ def display_analysis_result(analysis_key, file_name, props):
     # --- 요약 (날짜 범위 요약 테이블) ---
     st.subheader("기간 요약")
     
-    if date_range_for_aggregation:
-        # 요약 테이블에는 선택된 UI 날짜 범위만 보여줌 (데이터는 전체를 사용)
+    # 기간 요약 테이블은 UI 필터 범위 내에서 집계 데이터를 보여줍니다.
+    if filtered_dates_ui:
         summary_df_data = {
-            '날짜': [d.strftime('%m-%d') for d in filtered_dates],
-            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates],
-            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in filtered_dates],
-            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in filtered_dates],
-            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in filtered_dates],
-            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates]
+            '날짜': [d.strftime('%m-%d') for d in filtered_dates_ui],
+            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates_ui],
+            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in filtered_dates_ui],
+            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in filtered_dates_ui],
+            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in filtered_dates_ui],
+            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates_ui]
         }
         summary_df = pd.DataFrame(summary_df_data).set_index('날짜')
         st.dataframe(summary_df.transpose())
     else:
-        st.info("선택된 조건에 해당하는 요약 데이터가 없습니다.")
+        # 이 부분이 실행되면 기간 요약 테이블이 안 나옵니다.
+        st.info("선택된 UI 날짜 조건에 해당하는 요약 데이터가 없습니다.")
 
     st.markdown("---")
     
