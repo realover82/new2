@@ -6,6 +6,8 @@ import altair as alt
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_display import display_analysis_result
+# 새로 추가된 차트 생성 모듈 임포트
+from chart_generator import create_stacked_bar_chart 
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 # 이 파일들은 실제 데이터 로딩 및 분석 로직을 담고 있다고 가정합니다.
@@ -39,8 +41,9 @@ def main():
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     # ======================================================== 
 
-    # 탭 정의
-    tabs = st.tabs([f"파일 {key} 분석" for key in ANALYSIS_KEYS])
+    # 탭 정의 (그래프 탭은 PCB 데이터 전용으로 가정하고 이름을 변경)
+    tab_names = [f"파일 {key} 분석" for key in ANALYSIS_KEYS] + ["PCB QC 요약 그래프"]
+    tabs = st.tabs(tab_names)
     
     # 탭 속성과 분석 함수를 결합한 최종 맵
     tab_map = {
@@ -50,6 +53,9 @@ def main():
         'Semi': {**TAB_PROPS_MAP['Semi'], 'tab': tabs[3], 'reader': read_csv_with_dynamic_header_for_Semi, 'analyzer': analyze_Semi_data},
         'Batadc': {**TAB_PROPS_MAP['Batadc'], 'tab': tabs[4], 'reader': read_csv_with_dynamic_header_for_Batadc, 'analyzer': analyze_Batadc_data}
     }
+    
+    # 그래프 탭은 마지막 인덱스
+    chart_tab = tabs[5] 
 
     # === 사이드바 컬럼 목록 표시 ===
     st.sidebar.title("현재 데이터 컬럼")
@@ -59,7 +65,7 @@ def main():
                 st.code(st.session_state.sidebar_columns[key])
     # ====================================================
 
-    # 메인 탭 로직
+    # 메인 탭 로직 (CSV 분석 탭)
     for key, props in tab_map.items():
         with props['tab']:
             st.header(f"{key.upper()} 데이터 분석")
@@ -109,6 +115,31 @@ def main():
                 if st.session_state.analysis_results[key] is not None:
                     # analysis_display.py의 함수 호출
                     display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
+
+    # ==============================
+    # 5. 그래프 탭 로직 추가 (분석 데이터 기반으로 변경)
+    # ==============================
+    with chart_tab:
+        st.header("PCB 테스트 항목별 QC 결과 그래프")
+        st.markdown("이 그래프는 '파일 Pcb 분석' 탭에서 로드된 실제 분석 데이터를 기반으로 테스트 항목별 QC 결과를 시각화합니다.")
+        
+        df_pcb = st.session_state.analysis_results.get('Pcb')
+        
+        if df_pcb is None or df_pcb.empty:
+            st.warning("그래프를 생성하려면 '파일 Pcb 분석' 탭에서 CSV 파일을 로드하고 '분석 실행'을 먼저 완료해야 합니다.")
+        else:
+            # 버튼을 눌러 그래프 생성 함수 호출
+            if st.button("PCB QC 요약 그래프 생성"):
+                with st.spinner("그래프 생성 중..."):
+                    # 실제 분석된 PCB 데이터(df_pcb)와 키('Pcb')를 차트 생성 함수에 전달
+                    chart_figure = create_stacked_bar_chart(df_pcb, 'PCB')
+                    
+                    if chart_figure:
+                        st.pyplot(chart_figure)
+                        st.markdown("---")
+                        st.success(f"PCB 데이터 ({df_pcb.shape[0]}건)를 기반으로 그래프가 생성되었습니다.")
+                    else:
+                        st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다. PCB 데이터의 형식을 확인해주세요.")
 
 if __name__ == "__main__":
     main()
