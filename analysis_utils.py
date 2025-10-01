@@ -31,7 +31,6 @@ def check_initial_validity(analysis_key: str, props: Dict[str, str]) -> Optional
 def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[date], props: Dict[str, str]) -> Tuple[str, date, date, pd.DataFrame]:
     """
     기본 필터링 UI를 설정하고 사용자의 선택 및 필터링된 DF를 반환합니다.
-    이 함수에서 날짜 및 Jig 필터링이 실제로 수행됩니다.
     """
     st.subheader("기본 필터링") 
     
@@ -54,7 +53,7 @@ def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[
         # 오류 발생 시 빈 DataFrame 반환
         return selected_jig, min_date, max_date, pd.DataFrame()
         
-    # === 핵심 로직: 실제 필터링 수행 ===
+    # === 핵심 로직: 실제 필터링 재활성화 및 안전한 날짜 변환 ===
     df_filtered = df_raw.copy()
     timestamp_col = props['timestamp_col']
     
@@ -62,30 +61,18 @@ def setup_filtering_ui(analysis_key: str, df_raw: pd.DataFrame, all_dates: List[
         # 날짜 컬럼을 강제 변환 후 필터링을 시도합니다.
         df_temp = df_filtered.copy()
         df_temp['__DATE_TEMP__'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
-        
-        # DEBUG 1: 원본 데이터 로드 후 필터링 전 행 수
-        if analysis_key == 'Pcb':
-            st.info(f"DEBUG 0: 원본 데이터 로드됨 (총 행 수: {df_raw.shape[0]})")
-        
-        # 날짜 변환 실패(NaT)한 행 제거
         df_temp = df_temp.dropna(subset=['__DATE_TEMP__']) 
 
+        # 1. 날짜 필터링
         df_filtered = df_temp[
             (df_temp['__DATE_TEMP__'] >= start_date) & 
             (df_temp['__DATE_TEMP__'] <= end_date)
         ].copy()
         
-        # DEBUG 1: 날짜 필터링 후 확인
-        if analysis_key == 'Pcb':
-            st.info(f"DEBUG 1: 날짜 필터링 후 행 수: {df_filtered.shape[0]} ({start_date} ~ {end_date})")
-
-        # Jig 필터링
+        # 2. Jig 필터링
         if selected_jig != "전체" and not df_filtered.empty:
             df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
-            # DEBUG 2: Jig 필터링 후 확인
-            if analysis_key == 'Pcb':
-                 st.info(f"DEBUG 2: Jig 필터링 후 행 수: {df_filtered.shape[0]} (Jig: {selected_jig})")
-        
+            
         # 임시 컬럼 제거 및 최종 반환
         if '__DATE_TEMP__' in df_filtered.columns:
             df_filtered = df_filtered.drop(columns=['__DATE_TEMP__'])
