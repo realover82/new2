@@ -6,7 +6,8 @@ import altair as alt
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_display import display_analysis_result
-from chart_generator import create_stacked_bar_chart 
+# chart_generator.py는 사용하지 않으므로 임포트를 제거합니다.
+# from chart_generator import create_stacked_bar_chart # 제거됨
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 from csv2 import read_csv_with_dynamic_header, analyze_data
@@ -19,12 +20,36 @@ from csv_Batadc import read_csv_with_dynamic_header_for_Batadc, analyze_Batadc_d
 # 콜백 함수 정의
 # ==============================
 def set_show_chart_true():
-    """그래프 표시 플래그를 True로 설정하는 콜백 함수"""
-    st.session_state.show_pcb_chart = True
+    """테이블 표시 플래그를 True로 설정하는 콜백 함수"""
+    st.session_state.show_summary_table = True
     
 def set_show_chart_false():
-    """그래프 표시 플래그를 False로 설정하는 콜백 함수"""
-    st.session_state.show_pcb_chart = False
+    """테이블 표시 플래그를 False로 설정하는 콜백 함수"""
+    st.session_state.show_summary_table = False
+
+# ==============================
+# 새로운 테이블 생성 및 표시 함수
+# ==============================
+def show_summary_table():
+    """요청하신 고정된 테스트 결과 요약 테이블을 DataFrame으로 만들어 표시합니다."""
+    data = {
+        'Test': ['PcbUsbCurr', 'PcbBatVolt', 'PcbWirelessVolt', 'PcbSleepCurr', 'PcbLed', 'PcbIrPwr', 'PcbIrCurr'],
+        'Pass': [77, 86, 86, 67, 72, 40, 21],
+        '미달 (Under)': [9, 0, 0, 0, 6, 0, 15],
+        '초과 (Over)': [0, 0, 0, 2, 0, 0, 0],
+        '제외 (Excluded)': [0, 0, 0, 17, 8, 46, 50],
+        'Total': [86, 86, 86, 86, 86, 86, 86],
+        'Failure': [9, 0, 0, 2, 6, 0, 15],
+        'Failure Rate (%)': ['10.5%', '0.0%', '0.0%', '2.3%', '7.0%', '0.0%', '17.4%']
+    }
+    df_summary = pd.DataFrame(data).set_index('Test')
+    
+    st.markdown("---")
+    st.subheader("PCB 테스트 결과 요약 테이블 (고정 데이터)")
+    st.dataframe(df_summary)
+    st.markdown("---")
+    st.info("이 테이블은 버튼 기능 구현을 위해 임시로 삽입된 고정 데이터입니다. 실제 분석 결과와는 무관합니다.")
+    
 
 # ==============================
 # 메인 실행 함수
@@ -52,8 +77,9 @@ def main():
         if f'qc_filter_mode_{key}' not in st.session_state:
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     
-    if 'show_pcb_chart' not in st.session_state:
-        st.session_state.show_pcb_chart = False
+    # 그래프 플래그 이름을 테이블 플래그로 변경
+    if 'show_summary_table' not in st.session_state:
+        st.session_state.show_summary_table = False
     
     tab_map = {
         key: {
@@ -91,25 +117,26 @@ def main():
         st.sidebar.info("분석 실행 후 컬럼 목록이 표시됩니다.")
 
     # ====================================================
-    # 2. 사이드바: PCB QC 요약 그래프 버튼 배치
+    # 2. 사이드바: 테이블 표시 버튼 배치
     # ====================================================
     st.sidebar.markdown("---")
-    st.sidebar.subheader("QC 결과 시각화")
+    st.sidebar.subheader("결과 요약 테이블")
 
     df_pcb = st.session_state.analysis_results.get('Pcb')
     
     if df_pcb is None or df_pcb.empty:
-        st.sidebar.warning("'파일 Pcb 분석' 실행 후 그래프 버튼이 나타납니다.")
+        st.sidebar.warning("'파일 Pcb 분석' 실행 후 버튼이 나타납니다.")
     else:
         # 버튼 표시 로직
-        if st.session_state.show_pcb_chart:
-            st.sidebar.button("그래프 숨기기", on_click=set_show_chart_false, key='hide_pcb_chart')
+        if st.session_state.show_summary_table:
+            st.sidebar.button("테이블 숨기기", on_click=set_show_chart_false, key='hide_pcb_table')
         else:
-            st.sidebar.button("PCB QC 요약 그래프 보기", on_click=set_show_chart_true, key='show_pcb_chart_btn')
+            # 테이블 보기 버튼 (클릭 시 show_summary_table 플래그를 True로 설정)
+            st.sidebar.button("PCB 요약 테이블 보기", on_click=set_show_chart_true, key='show_pcb_table_btn')
         
-        # 다른 분석 항목을 선택하면 그래프 플래그 초기화
+        # 다른 분석 항목을 선택하면 테이블 플래그 초기화
         if selected_key != 'Pcb':
-             st.session_state.show_pcb_chart = False
+             st.session_state.show_summary_table = False
     
     # --------------------------
     # MAIN 영역 시작
@@ -118,47 +145,19 @@ def main():
     st.markdown("## [Main Content Start]")
     st.markdown("---")
     
+    # --- 요약 테이블 출력 위치 (Main Content 상단) ---
+    if st.session_state.show_summary_table:
+        show_summary_table() # 고정된 테이블 표시 함수 호출
+            
+    st.markdown("---") 
+    # -----------------------------------------------
+
     key = selected_key
     props = tab_map[key]
     
     st.header(f"분석 대상: {key.upper()} 데이터 분석")
     
-    # --- 그래프 출력 위치 (Main Content 상단) ---
-    df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
-    
-    # --- 디버깅 섹션: 그래프가 왜 안 보이는지 확인 ---
-    if st.session_state.show_pcb_chart:
-        if df_pcb_filtered is not None and not df_pcb_filtered.empty:
-            st.error("디버깅 상태: [그래프 출력 로직 시작]") # 이 메시지가 나와야 그래프가 보임
-        else:
-            st.warning("디버깅 상태: [그래프 출력 조건 미달성] - 필터링된 데이터가 비어 있습니다.")
-    else:
-        st.info("디버깅 상태: [그래프 출력 조건 미달성] - '그래프 보기' 버튼이 눌러지지 않았습니다.")
-    st.markdown("---")
-    # -----------------------------------------------
-
-    
-    if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
-        
-        st.markdown("---")
-        st.subheader("PCB 테스트 항목별 QC 결과 그래프") 
-        
-        try:
-            with st.container():
-                with st.spinner("그래프 생성 중..."):
-                    chart_figure = create_stacked_bar_chart(df_pcb_filtered, 'PCB')
-                    
-                    if chart_figure:
-                        st.pyplot(chart_figure)
-                        st.info(f"PCB 데이터 (필터링된 {df_pcb_filtered.shape[0]}건)를 기반으로 그래프가 생성되었습니다.")
-                    else:
-                        st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다.")
-        except Exception as e:
-            st.error(f"그래프 렌더링 중 오류 발생: {e}")
-            st.session_state.show_pcb_chart = False
-            
-    st.markdown("---") 
-
+    # 파일 업로드 및 분석 실행 로직 (생략)
     st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
     
     if st.session_state.uploaded_files[key]:
@@ -185,7 +184,7 @@ def main():
                             st.session_state.sidebar_columns[key] = final_cols
                             st.session_state.field_mapping[key] = final_cols
                             
-                            st.session_state.show_pcb_chart = False 
+                            st.session_state.show_summary_table = False 
                             st.success("분석 완료! 결과가 저장되었습니다.")
                         
             except Exception as e:
@@ -194,11 +193,11 @@ def main():
                 st.session_state.analysis_results[key] = None
 
         if st.session_state.analysis_results.get(key) is not None:
-            # 상세 분석 결과 (Main Content의 주요 부분)
+            # 상세 분석 결과
             display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
             
     # --------------------------
-    # FOOTER 영역 시작 (Main Content의 모든 요소가 끝난 지점)
+    # FOOTER 영역 시작
     # --------------------------
     st.markdown("---")
     st.markdown("## [Footer Content Start]")
