@@ -5,7 +5,7 @@ from typing import Optional
 def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
     QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
-    [수정됨]: X축을 'Date'로 설정하고, 'Test' 항목별로 그래프를 분리(Facet)하여 일별/항목별 통계를 표시합니다.
+    [수정됨]: 'mark' 오류 해결 및 레이어링 로직 안정화.
     """
     if summary_df.empty:
         return None
@@ -32,53 +32,37 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         range=['#FF9800', '#F44336', '#9E9E9E'] 
     )
 
-    # --------------------------
-    # 핵심 수정: 인코딩 및 패싯 변경
-    # --------------------------
-    # X축: Date (일별 분리)
-    # Column: Test (항목별 분리)
-    
+    # 1. Base Chart (패싯 인코딩을 제외한 기본 인코딩만 정의)
     base = alt.Chart(df_long).encode(
-        # X축을 날짜로 설정하고 Test 항목 내에서 그룹을 분리합니다.
-        x=alt.X('Date', axis=alt.Axis(title='날짜', format='%m-%d')),
+        x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
         y=alt.Y('Count', title='유닛 수'),
         color=alt.Color('Status', scale=color_scale, sort=status_order),
-        # tooltip에 Date, Jig, Test 모두 포함
         tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
     ).properties(
-        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (일별 분리)'
-    ).resolve_scale(
-        y='independent' # Y축 독립 설정
+        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (누적 막대 차트)'
     )
 
-    # 2. 막대 (Bar) 레이어: Date와 Test 항목별로 막대를 그립니다.
+    # 2. 막대 (Bar) 레이어 생성
     chart_bar = base.mark_bar()
     
-    # 3. 텍스트 (Text) 레이어
-    chart_text = chart_bar.mark_text(
+    # 3. 텍스트 (Text) 레이어 생성 (이 부분이 오류의 원인이었습니다)
+    # [수정]: base 차트에서 다시 시작하여 mark_text를 호출합니다.
+    chart_text = alt.Chart(df_long).encode(
+        # Bar 차트와 동일한 X/Y 인코딩을 사용합니다.
+        x=alt.X('Test', sort=None),
+        y=alt.Y('sum(Count)', stack='zero'),
+        # 텍스트 인코딩을 추가합니다.
+        text=alt.Text('sum(Count)', format=',.0f'),
+        color=alt.value('black') # 텍스트 색상 고정
+    ).mark_text(
         align='center',
         baseline='bottom',
         dy=-5
-    ).encode(
-        y=alt.Y('sum(Count)', stack='zero'),
-        text=alt.Text('sum(Count)', format=',.0f'),
-        color=alt.value('black') 
-    ).transform_aggregate(
-        total_count='sum(Count)',
-        # Date, Jig, Test별로 합산합니다.
-        groupby=['Date', 'Jig', 'Test', 'Status'] 
-    ).encode(
-        color=alt.value('black') 
     )
 
-    # 4. 최종 레이어링 및 패싯 적용: Test 항목별로 그래프를 분리합니다.
-    layered_chart = alt.layer(chart_bar, chart_text).resolve_scale(
+    # 4. 최종 레이어링 (차트와 텍스트를 합침)
+    final_chart = alt.layer(chart_bar, chart_text).resolve_scale(
         y='independent'
-    )
-    
-    final_chart = layered_chart.facet(
-        column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
     ).interactive()
-
 
     return final_chart
