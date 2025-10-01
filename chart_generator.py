@@ -1,30 +1,14 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 from typing import Optional
 
 # ==================================
-# 1. 한글 폰트 설정 (Streamlit/Matplotlib)
-# 시스템 환경에 따라 폰트 설정이 실패해도 앱이 중단되지 않도록 합니다.
+# 1. 한글 폰트 설정 (Streamlit 환경에 맞게 간소화)
 # ==================================
-def set_korean_font():
-    """Matplotlib에서 한글 출력을 위한 폰트 설정"""
-    try:
-        # 1. 맑은 고딕 시도 (Windows)
-        font_name = fm.FontProperties(fname='C:/Windows/Fonts/malgun.ttf').get_name()
-        plt.rc('font', family=font_name)
-    except Exception:
-        try:
-            # 2. NanumGothic 시도 (Linux/Streamlit Cloud)
-            plt.rc('font', family='NanumGothic')
-        except Exception:
-            # 3. 모든 시도 실패 시 경고 없이 기본 폰트 사용 (한글 깨짐 발생 가능)
-            pass
-
-    plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
-
-# 모듈 로드 시 폰트 설정을 바로 실행합니다.
-set_korean_font()
+# 요청하신 대로 폰트 설정을 명시적으로 반영합니다.
+# Streamlit 환경에서 'Malgun Gothic' 또는 'NanumGothic'이 설치되어 있어야 합니다.
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
 
 
 def create_stacked_bar_chart(df: pd.DataFrame, key_prefix: str) -> Optional[plt.Figure]:
