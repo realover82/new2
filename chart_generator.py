@@ -5,7 +5,7 @@ from typing import Optional
 def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
     QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
-    [수정됨]: 'mark' 오류 해결 및 레이어링 로직 안정화.
+    [수정됨]: 'Date'와 'Test' 항목을 X축과 Column으로 분리하여 일별/항목별 통계를 표시합니다.
     """
     if summary_df.empty:
         return None
@@ -34,24 +34,25 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
 
     # 1. Base Chart (패싯 인코딩을 제외한 기본 인코딩만 정의)
     base = alt.Chart(df_long).encode(
-        x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+        # [핵심 수정]: X축을 Date로 설정하여 날짜별로 막대를 분리
+        x=alt.X('Date', axis=alt.Axis(title='날짜 (일별)', format='%m-%d')),
         y=alt.Y('Count', title='유닛 수'),
         color=alt.Color('Status', scale=color_scale, sort=status_order),
+        # Jig별로 다른 색상이나 패턴을 원하면 여기에 'Jig'를 추가할 수 있습니다.
         tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
     ).properties(
-        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (누적 막대 차트)'
+        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (일별 분리)'
     )
 
     # 2. 막대 (Bar) 레이어 생성
+    # X축에 Date를 썼으므로, Date가 중복되지 않도록 Test 항목별로 분리해야 합니다.
     chart_bar = base.mark_bar()
     
-    # 3. 텍스트 (Text) 레이어 생성 (이 부분이 오류의 원인이었습니다)
-    # [수정]: base 차트에서 다시 시작하여 mark_text를 호출합니다.
+    # 3. 텍스트 (Text) 레이어 생성
     chart_text = alt.Chart(df_long).encode(
-        # Bar 차트와 동일한 X/Y 인코딩을 사용합니다.
-        x=alt.X('Test', sort=None),
+        # X축을 Date로 설정 (Bar 차트와 동일)
+        x=alt.X('Date', sort=None),
         y=alt.Y('sum(Count)', stack='zero'),
-        # 텍스트 인코딩을 추가합니다.
         text=alt.Text('sum(Count)', format=',.0f'),
         color=alt.value('black') # 텍스트 색상 고정
     ).mark_text(
@@ -61,8 +62,13 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     )
 
     # 4. 최종 레이어링 (차트와 텍스트를 합침)
-    final_chart = alt.layer(chart_bar, chart_text).resolve_scale(
+    layered_chart = alt.layer(chart_bar, chart_text).resolve_scale(
         y='independent'
     ).interactive()
+    
+    # 5. [핵심 수정]: 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    final_chart = layered_chart.facet(
+        column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+    )
 
     return final_chart
