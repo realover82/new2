@@ -5,7 +5,7 @@ import altair as alt
 
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
-from analysis_display import display_analysis_result
+from analysis_main import display_analysis_result # <-- 수정됨: analysis_display 대신 analysis_main 임포트
 # chart_generator.py는 사용하지 않지만, 임포트 구조는 유지합니다.
 # from chart_generator import create_stacked_bar_chart 
 
@@ -37,9 +37,9 @@ def generate_dynamic_summary_table(df: pd.DataFrame):
         return
 
     # 1. QC 컬럼 식별
-    qc_columns = [col for col in df.columns if col.endswith('_QC')]
+    qc_columns = [col for col in df.columns if df[col].dtype == object and col.endswith('_QC')] # object 타입이면서 _QC로 끝나는 컬럼만 선택
     if not qc_columns:
-        st.warning("데이터에서 '_QC'로 끝나는 품질 관리 컬럼을 찾을 수 없습니다.")
+        st.warning("데이터에서 '_QC'로 끝나는 품질 관리 컬럼(문자열 타입)을 찾을 수 없습니다.")
         return
 
     # 2. 상태 매핑: '데이터 부족'은 '제외'로 처리
@@ -198,12 +198,12 @@ def main():
     
     if st.session_state.show_summary_table:
         
-        # 데이터 유효성 검사 강화
+        # 데이터 유효성 검사 (analysis_main에서 필터링을 제거했기 때문에 이 검사는 원본 DF 검사와 동일)
         if df_pcb_filtered is not None and not df_pcb_filtered.empty:
             generate_dynamic_summary_table(df_pcb_filtered) # 동적 테이블 생성
         else:
-            # 데이터가 비어 있을 경우, 플래그를 해제하고 사용자에게 안내
-            st.warning("테이블을 생성하려면 '파일 Pcb 분석'에서 데이터를 로드하고 필터링된 결과가 1건 이상 있어야 합니다.")
+            # 이 에러 메시지는 'Pcb 분석 실행' 자체가 실패했을 때만 나옵니다.
+            st.error("테이블 생성 실패: 원본 PCB 데이터가 로드되지 않았거나 비어 있습니다. 'Pcb 분석 실행'을 확인하세요.")
             st.session_state.show_summary_table = False # 플래그 해제 (버튼 재표시 유도)
             
     st.markdown("---") 
