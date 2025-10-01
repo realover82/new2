@@ -77,11 +77,21 @@ def display_analysis_result(analysis_key, file_name, props):
 
     filtered_dates = sorted(df_filtered[props['timestamp_col']].dt.date.unique().tolist())
     
+    # ******************* 디버깅 코드 위치 변경 *******************
+    if df_filtered.empty:
         # --- 임시 디버깅 코드 추가 ---
+        if analysis_key == 'Pcb':
+            st.error("DEBUG: Pcb 필터링 후 데이터 크기: 0 행") # 0행일 때 에러로 표시
+        # --- 임시 디버깅 코드 종료 ---
+        
+        st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다.")
+        st.session_state[f'filtered_df_{analysis_key}'] = pd.DataFrame() 
+        return
+        
+    # --- 임시 디버깅 코드 추가 ---
     if analysis_key == 'Pcb':
-        st.write(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행")
+        st.success(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행") # 1행 이상일 때 성공으로 표시
     # --- 임시 디버깅 코드 종료 ---
-
 
     if df_filtered.empty:
         st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다.")
