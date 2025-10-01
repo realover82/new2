@@ -40,6 +40,11 @@ def display_analysis_result(analysis_key, file_name, props):
     
     # --- 기본 필터링 (Jig, 날짜 범위) ---
     st.subheader("기본 필터링")
+    
+    # --- DEBUG 0: 원본 데이터 확인 ---
+    if analysis_key == 'Pcb':
+        st.info(f"DEBUG 0: 원본 데이터 로드됨 (총 행 수: {df_raw.shape[0]})")
+        
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     
     with filter_col1:
@@ -50,11 +55,6 @@ def display_analysis_result(analysis_key, file_name, props):
         st.warning("분석할 데이터가 없습니다.")
         return
         
-    # 날짜 입력 위젯에 사용할 수 있도록 min_date, max_date가 datetime.date 타입인지 확인
-    if not all_dates:
-        st.warning("날짜 정보가 유효하지 않습니다.")
-        return
-    
     min_date = min(all_dates)
     max_date = max(all_dates)
 
@@ -77,6 +77,9 @@ def display_analysis_result(analysis_key, file_name, props):
             (df_raw[timestamp_col].dt.date >= start_date) & 
             (df_raw[timestamp_col].dt.date <= end_date)
         ].copy()
+        # --- DEBUG 1: 날짜 필터링 후 확인 ---
+        if analysis_key == 'Pcb':
+            st.info(f"DEBUG 1: 날짜 필터링 후 행 수: {df_filtered.shape[0]} ({start_date} ~ {end_date})")
     else:
         # 날짜 컬럼 타입 오류 디버깅
         st.error(f"DEBUG ERROR: 컬럼 '{timestamp_col}'이 datetime 타입이 아닙니다. (현재 타입: {df_raw[timestamp_col].dtype}). 분석 함수를 확인하세요.")
@@ -85,17 +88,20 @@ def display_analysis_result(analysis_key, file_name, props):
     # Jig 필터링
     if selected_jig != "전체" and not df_filtered.empty:
         df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
+        # --- DEBUG 2: Jig 필터링 후 확인 ---
+        if analysis_key == 'Pcb':
+             st.info(f"DEBUG 2: Jig 필터링 후 행 수: {df_filtered.shape[0]} (Jig: {selected_jig})")
         
     # 세션 상태에 필터링된 DF 저장
     st.session_state[f'filtered_df_{analysis_key}'] = df_filtered.copy()
     # --------------------------------------------------------------------
 
-    # --- 디버깅 코드 위치 (데이터 크기 확인) ---
+    # --- 최종 상태 확인 ---
     if analysis_key == 'Pcb':
         if df_filtered.empty:
-            st.warning("DEBUG: Pcb 필터링 후 데이터 크기: 0 행 (필터 조건에 맞는 데이터 없음)")
+            st.error("DEBUG FINAL: 필터링된 DF가 최종적으로 비어있습니다. 테이블/그래프 생성 불가.")
         else:
-            st.success(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행")
+            st.success(f"DEBUG FINAL: 필터링된 DF 최종 행 수: {df_filtered.shape[0]} (테이블 생성 가능)")
     # -----------------------------------------
 
     if df_filtered.empty:
@@ -113,8 +119,6 @@ def display_analysis_result(analysis_key, file_name, props):
     
     daily_aggregated_data = {}
     
-    # 필터링된 날짜 목록을 기반으로 집계 데이터 계산
-    # all_dates 대신 filtered_dates를 사용해야 하지만, 여기서는 필터링된 날짜 범위만 사용
     date_range_for_aggregation = [date for date in all_dates if start_date <= date <= end_date]
 
     for date_obj in date_range_for_aggregation:
@@ -151,7 +155,6 @@ def display_analysis_result(analysis_key, file_name, props):
     # 1. 상세 내역 필드 선택 기능 추가
     all_raw_columns = df_raw.columns.tolist()
     
-    # 디폴트 필드 구성: SNumber와 모든 QC 컬럼으로만 제한
     snumber_col = next((col for col in all_raw_columns if col.lower() == 'snumber'), 'SNumber')
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
     initial_default = list(set([snumber_col] + qc_cols_found)) 
@@ -402,7 +405,7 @@ def display_analysis_result(analysis_key, file_name, props):
         applied_filters = st.session_state[filter_state_key] # 필터 즉시 반영
     
     with st.expander("DF 조회"):
-        df_display = df_raw.copy()
+        df_display = df_filtered.copy() # df_raw 대신 필터링된 df_filtered 사용
         
         has_snumber_query = False
         
