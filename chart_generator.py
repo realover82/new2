@@ -1,6 +1,7 @@
 import pandas as pd
 import altair as alt
 from typing import Optional
+import streamlit as st 
 
 def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
