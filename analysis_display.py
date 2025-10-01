@@ -77,6 +77,12 @@ def display_analysis_result(analysis_key, file_name, props):
 
     filtered_dates = sorted(df_filtered[props['timestamp_col']].dt.date.unique().tolist())
     
+        # --- 임시 디버깅 코드 추가 ---
+    if analysis_key == 'Pcb':
+        st.write(f"DEBUG: Pcb 필터링 후 데이터 크기: {df_filtered.shape[0]} 행")
+    # --- 임시 디버깅 코드 종료 ---
+
+
     if df_filtered.empty:
         st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다.")
         # 데이터가 없으면 세션 상태의 필터된 DF도 비어있는지 확인
