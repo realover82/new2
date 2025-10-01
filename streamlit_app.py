@@ -5,7 +5,7 @@ import altair as alt
 
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
-from analysis_main import display_analysis_result # <-- 수정됨: analysis_display 대신 analysis_main 임포트
+from analysis_main import display_analysis_result # analysis_main에서 main 함수 호출
 # chart_generator.py는 사용하지 않지만, 임포트 구조는 유지합니다.
 # from chart_generator import create_stacked_bar_chart 
 
@@ -28,19 +28,22 @@ def set_show_chart_false():
     st.session_state.show_summary_table = False
 
 # ==============================
-# 동적 요약 테이블 생성 함수 (그래프 데이터 구조와 유사)
+# 동적 요약 테이블 생성 함수 (선택된 필드만 반영)
 # ==============================
-def generate_dynamic_summary_table(df: pd.DataFrame):
-    """필터링된 DataFrame을 사용하여 테스트 항목별 QC 결과 요약 테이블을 생성합니다."""
+def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
+    """필터링된 DataFrame과 선택된 필드를 사용하여 테스트 항목별 QC 결과 요약 테이블을 생성합니다."""
     if df.empty:
         st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
         return
 
-    # 1. QC 컬럼 식별
-    # 문자열 타입이면서 _QC로 끝나는 컬럼만 선택 (QC 상태 코드 확인용)
-    qc_columns = [col for col in df.columns if df[col].dtype == object and col.endswith('_QC')] 
+    # 선택된 필드 목록에서 QC 컬럼만 추출합니다. (예: 'PcbUsbCurr' -> 'PcbUsbCurr_QC')
+    qc_cols_in_fields = [f"{field}_QC" for field in selected_fields if not field.endswith('_QC')]
+    
+    # DF에 실제로 존재하는 QC 컬럼만 사용합니다.
+    qc_columns = [col for col in qc_cols_in_fields if col in df.columns and df[col].dtype == object]
+    
     if not qc_columns:
-        st.warning("데이터에서 '_QC'로 끝나는 품질 관리 컬럼(문자열 타입)을 찾을 수 없습니다.")
+        st.warning("선택된 상세 내역 필드 중에서 유효한 품질 관리(_QC) 컬럼을 찾을 수 없습니다. '상세 내역'에서 필드를 선택해 주세요.")
         return
 
     # 2. 상태 매핑: '데이터 부족'은 '제외'로 처리
@@ -199,9 +202,14 @@ def main():
     
     if st.session_state.show_summary_table:
         
-        # 데이터 유효성 검사 (analysis_main에서 필터링된 DF를 사용함)
+        # detail_display에서 저장된 선택 필드 목록을 가져옵니다.
+        # analysis_key가 'Pcb'일 때의 필드 목록을 사용합니다.
+        selected_fields_for_table = st.session_state.get(f'detail_fields_select_Pcb', [])
+        
+        # 데이터 유효성 검사 (필터링된 DF가 존재하고 비어있지 않은지)
         if df_pcb_filtered is not None and not df_pcb_filtered.empty:
-            generate_dynamic_summary_table(df_pcb_filtered) # 동적 테이블 생성
+            # 테이블 함수에 선택된 필드 목록을 전달합니다.
+            generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table)
         else:
             # 이 에러 메시지는 'Pcb 분석 실행' 자체가 실패했거나 필터링 결과 0건일 때 나옵니다.
             st.error("테이블 생성 실패: 필터링된 PCB 데이터가 없거나 비어 있습니다. 'Pcb 분석 실행'을 확인하고 필터(날짜/Jig)를 해제해보세요.")

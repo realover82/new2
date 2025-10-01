@@ -17,12 +17,15 @@ def display_detail_section(analysis_key: str, df_filtered: pd.DataFrame, summary
     qc_cols_found = [col for col in all_raw_columns if col.endswith('_QC')]
     initial_default = list(set([snumber_col] + qc_cols_found)) 
     
+    # === 핵심 수정: 선택된 필드 목록을 세션 상태에 저장 ===
     selected_detail_fields = st.multiselect(
         "상세 내역에 표시할 필드 선택",
         all_raw_columns,
         default=initial_default,
         key=f"detail_fields_select_{analysis_key}"
     )
+    # 멀티셀렉트 결과가 변경될 때마다 세션 상태에 저장합니다.
+    st.session_state[f'detail_fields_{analysis_key}'] = selected_detail_fields 
     # ========================================================
 
     # 2. 상세 내역 보기 제어용 세션 상태 변수 초기화 및 버튼
@@ -68,7 +71,6 @@ def display_detail_section(analysis_key: str, df_filtered: pd.DataFrame, summary
         current_mode = st.session_state[f'detail_mode_{analysis_key}']
         qc_filter_mode = st.session_state[f'qc_filter_mode_{analysis_key}'] #추가
         
-        # aggregation_logic에서 생성된 날짜 목록을 가져옵니다. (필터 반영된 날짜)
         date_range_for_display = st.session_state.get(f'agg_dates_{analysis_key}', all_dates)
         
         for date_obj in date_range_for_display: # 변경된 필터링된 날짜 사용
