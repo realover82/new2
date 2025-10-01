@@ -1,74 +1,91 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-from typing import Optional, List
-import matplotlib.font_manager as fm
+import altair as alt
+from typing import Optional
 
-# ==================================
-# 1. 한글 폰트 설정 (Streamlit/Matplotlib)
-# ==================================
-# 폰트 설정 (이 부분이 한글 깨짐을 해결합니다.)
-try:
-    # 윈도우 환경: 'Malgun Gothic'
-    plt.rcParams['font.family'] = 'Malgun Gothic'
-except:
-    try:
-        # 리눅스 환경: 나눔고딕 (설치되어 있어야 함)
-        plt.rcParams['font.family'] = 'NanumGothic'
-    except:
-        pass 
-plt.rcParams['axes.unicode_minus'] = False # 마이너스 기호 깨짐 방지
-
-
-def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[plt.Figure]:
+def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
-    QC 요약 테이블 DataFrame을 사용하여 테스트 항목별 누적 막대 그래프를 생성하고 Figure 객체를 반환합니다.
-    summary_df는 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)' 컬럼을 포함해야 합니다.
+    QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
+    summary_df는 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)', 'Date', 'Jig' 컬럼을 포함해야 합니다.
     """
-    try:
-        # 1. 플롯을 위한 데이터 준비: 필요한 컬럼만 선택
-        plot_data_stacked = summary_df[[
-            'Pass', 
-            '미달 (Under)', 
-            '초과 (Over)', 
-            '제외 (Excluded)'
-        ]]
-        
-        # 'Test' 컬럼을 인덱스로 설정
-        plot_data_stacked.index = summary_df['Test']
-
-        # 2. 누적 막대 차트 생성
-        fig, ax = plt.subplots(figsize=(12, 7))
-        
-        # 누적 막대 차트 생성 (stacked=True)
-        plot_data_stacked.plot(
-            kind='bar', 
-            stacked=True, 
-            # 색상: Pass(녹색), 미달(주황), 초과(빨강), 제외(회색)
-            color=['#4CAF50', '#FF9800', '#F44336', '#9E9E9E'], 
-            ax=ax
-        )
-
-        ax.set_title(f'{key_prefix} 테스트 항목별 QC 결과 (누적 막대 차트)', fontsize=16)
-        ax.set_xlabel('테스트 항목', fontsize=14)
-        ax.set_ylabel('유닛 수', fontsize=14)
-        ax.legend(title='결과', loc='upper right')
-        plt.xticks(rotation=45, ha='right', fontsize=10)
-        plt.grid(axis='y', linestyle='--')
-        
-        # 3. 막대 위에 값(숫자) 표시 로직
-        for container in ax.containers:
-            # 막대별로 레이블 추가
-            labels = [f'{v.get_height():.0f}' if v.get_height() > 0 else '' for v in container]
-            ax.bar_label(container, labels=labels, label_type='center', fontsize=9)
-            
-        plt.tight_layout()
-        
-        return fig
-    
-    except Exception as e:
-        # 오류 발생 시 None을 반환
+    if summary_df.empty:
         return None
 
-if __name__ == '__main__':
-    # 모듈 테스트용 데이터 (실행하지 않음)
-    pass
+    # Altair를 위한 데이터 변환 (Wide to Long)
+    df_long = summary_df.melt(
+        id_vars=['Date', 'Jig', 'Test'],
+        value_vars=['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)'],
+        var_name='Status',
+        value_name='Count'
+    )
+    
+    # 0인 값은 제거하여 차트를 깔끔하게 만듭니다.
+    df_long = df_long[df_long['Count'] > 0]
+    
+    # 순서 정의
+    status_order = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+    color_scale = alt.Scale(
+        domain=status_order,
+        range=['#4CAF50', '#FF9800', '#F44336', '#9E9E9E']
+    )
+
+    base = alt.Chart(df_long).encode(
+        x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+        y=alt.Y('Count', title='유닛 수'),
+        color=alt.Color('Status', scale=color_scale, sort=status_order),
+        tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
+    ).properties(
+        title=f'{key_prefix} 테스트 항목별 QC 결과 (누적 막대 차트)'
+    )
+
+    chart = base.mark_bar()
+    
+    # 텍스트 레이블 (차트 위에 값 표시)
+    # Altair는 Mark_text를 사용합니다. Stacked bar에서는 레이블을 정확히 중앙에 배치하기 위해 sum(Count)를 사용합니다.
+    text = base.mark_text(
+        align='center',
+        baseline='middle',
+        dy=-5 # 막대 위에 약간 띄우기
+    ).encode(
+        y=alt.Y('sum(Count)', stack='zero'),
+        text=alt.Text('sum(Count)', format=',.0f'),
+        color=alt.value('black') # 텍스트 색상
+    ).transform_aggregate(
+        # 각 테스트 항목별로 상위/하위 값을 집계하여 텍스트를 배치합니다.
+        total_count='sum(Count)',
+        groupby=['Test', 'Status']
+    )
+    
+    # 최종 차트 생성 (레이어를 합침)
+    final_chart = (chart).interactive()
+
+    return final_chart
+# ```eof
+
+# ---
+
+# ## 2. `streamlit_app.py` 수정 (Jig/Date/차트 로직 통합)
+
+# `generate_dynamic_summary_table` 함수를 수정하여 **테이블 출력 시 Jig와 Date 컬럼을 포함**하고, **차트 버튼 클릭 시 테이블이 사라지지 않도록** 버튼 로직을 수정합니다.
+
+# ```python:Main Streamlit Application:streamlit_app.py
+# [Immersive content redacted for brevity.]
+# ```eof
+
+# ---
+
+# ## 3. `analysis_main.py` 수정 (Jig/Date 컬럼명 전달)
+
+# `analysis_main.py`에서 `generate_dynamic_summary_table` 호출 시 **테이블 생성에 필요한 컬럼 정보(`props`)**를 추가로 전달하도록 수정합니다.
+
+# ```python:Analysis Main Entry:analysis_main.py
+# [Immersive content redacted for brevity.]
+# ```eof
+
+# ---
+
+# ## 최종 확인 사항
+
+# # 1.  **3개 파일**을 모두 위 코드로 교체합니다.
+# # 2.  **앱을 새로고침**합니다.
+# # 3.  **'파일 Pcb 분석'**에서 **날짜나 Jig를 변경**하면, **QC 요약 테이블**에 **Date**와 **Jig**가 표시되며 합산되지 않고 각각의 행으로 분리되어 나타납니다.
+# # 4.  **"PCB 요약 차트 보기"** 버튼을 누르면, 테이블 아래에 **동적인 Altair 누적 막대 그래프**가 나타나고, **테이블은 사라지지 않고** 함께 표시됩니다.

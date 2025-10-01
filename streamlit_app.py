@@ -6,7 +6,7 @@ import altair as alt
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_main import display_analysis_result 
-from chart_generator import create_stacked_bar_chart # 차트 모듈 재임포트
+from chart_generator import create_stacked_bar_chart # Altair 차트 모듈
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 from csv2 import read_csv_with_dynamic_header, analyze_data
@@ -18,25 +18,32 @@ from csv_Batadc import read_csv_with_dynamic_header_for_Batadc, analyze_Batadc_d
 # ==============================
 # 콜백 함수 정의
 # ==============================
-def set_show_chart_true():
-    """테이블 표시 플래그를 True로 설정하는 콜백 함수"""
+def set_show_table_true():
+    """테이블을 표시하고 차트는 현재 상태 유지"""
     st.session_state.show_summary_table = True
-    st.session_state.show_chart = False # 테이블 보기 시 차트는 숨김
     
-def set_show_chart_false():
-    """테이블 및 차트 표시 플래그를 False로 설정하는 콜백 함수"""
+def set_show_table_false():
+    """테이블을 숨기고 차트는 현재 상태 유지"""
     st.session_state.show_summary_table = False
-    st.session_state.show_chart = False
     
 def set_show_chart_only_true():
-    """차트만 표시 플래그를 True로 설정하는 콜백 함수"""
+    """차트만 표시 플래그를 True로 설정 (테이블은 유지)"""
     st.session_state.show_chart = True
-    st.session_state.show_summary_table = False # 차트 보기 시 테이블 숨김
+
+def set_show_chart_false():
+    """차트만 숨기기 플래그를 False로 설정 (테이블은 유지)"""
+    st.session_state.show_chart = False
+    
+def set_hide_all():
+    """모두 숨기기"""
+    st.session_state.show_summary_table = False
+    st.session_state.show_chart = False
+
 
 # ==============================
 # 동적 요약 테이블 생성 함수 (선택된 _QC 컬럼만 반영)
 # ==============================
-def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
+def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, props: Dict[str, str]):
     """필터링된 DataFrame과 선택된 필드를 사용하여 테스트 항목별 QC 결과 요약 테이블을 생성합니다."""
     if df.empty:
         st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
@@ -47,6 +54,8 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
     
     if not qc_columns:
         st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
+        # [수정] 테이블 함수가 실패하면 차트 데이터도 초기화
+        st.session_state['summary_df_for_chart'] = None
         return
 
     # 2. 상태 매핑: '데이터 부족'은 '제외'로 처리
@@ -58,52 +67,68 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
         '데이터 부족': '제외 (Excluded)' 
     }
     
-    summary_data_list = []
+    JIG_COL = props['jig_col']
+    TIMESTAMP_COL = props['timestamp_col']
     
-    for qc_col in qc_columns:
-        test_name = qc_col.replace('_QC', '')
-        
-        status_counts = df[qc_col].value_counts().to_dict()
-        
-        row = {'Test': test_name}
-        total_count = 0
-        failure_count = 0
-        
-        result_counts = {
-            'Pass': 0, 
-            '미달 (Under)': 0, 
-            '초과 (Over)': 0, 
-            '제외 (Excluded)': 0
-        }
-        
-        for status, count in status_counts.items():
-            mapped_status = status_map.get(status)
-            if mapped_status:
-                result_counts[mapped_status] += count
-                total_count += count
-                
-                if mapped_status in ['미달 (Under)', '초과 (Over)']:
-                    failure_count += count
-        
-        row['Pass'] = result_counts['Pass']
-        row['미달 (Under)'] = result_counts['미달 (Under)']
-        row['초과 (Over)'] = result_counts['초과 (Over)']
-        row['제외 (Excluded)'] = result_counts['제외 (Excluded)']
-        row['Total'] = total_count
-        row['Failure'] = failure_count
-        row['Failure Rate (%)'] = f"{(failure_count / total_count * 100):.1f}%" if total_count > 0 else "0.0%"
-        
-        summary_data_list.append(row)
-        
-    # 최종 DataFrame 생성
-    summary_df = pd.DataFrame(summary_data_list)
+    # 3. 데이터프레임 준비 및 그룹핑
     
-    st.markdown("---")
-    st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (동적)")
-    st.dataframe(summary_df.set_index('Test'))
-    st.markdown("---")
+    # TIMESTAMP_COL을 날짜 객체로 변환하여 'Date' 컬럼 생성
+    try:
+        df['Date'] = pd.to_datetime(df[TIMESTAMP_COL], errors='coerce').dt.date
+    except Exception:
+        st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류. 데이터 형식을 확인하세요.")
+        st.session_state['summary_df_for_chart'] = None
+        return
+        
+    df['Jig'] = df[JIG_COL]
     
-    # [추가] 차트 생성을 위해 summary_df를 세션 상태에 저장합니다.
+    # 모든 QC 컬럼을 한 번에 녹여(melt) 행을 만듭니다.
+    df_melted = df.melt(
+        id_vars=['Date', 'Jig'], 
+        value_vars=qc_columns, 
+        var_name='QC_Test_Col', 
+        value_name='Status'
+    )
+    
+    df_melted = df_melted.dropna(subset=['Status'])
+    df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '제외 (Excluded)'))
+    
+    # 그룹별 카운트 계산: Date, Jig, QC_Test_Col, Mapped_Status 별로 행 수를 계산
+    df_grouped = df_melted.groupby(
+        ['Date', 'Jig', 'QC_Test_Col', 'Mapped_Status'], 
+        dropna=False
+    ).size().reset_index(name='Count')
+    
+    # 4. 최종 요약 테이블 생성
+    df_grouped['Test'] = df_grouped['QC_Test_Col'].str.replace('_QC', '')
+
+    df_pivot = df_grouped.pivot_table(
+        index=['Date', 'Jig', 'Test'], 
+        columns='Mapped_Status', 
+        values='Count', 
+        fill_value=0
+    ).reset_index()
+
+    required_cols = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+    for col in required_cols:
+        if col not in df_pivot.columns:
+            df_pivot[col] = 0
+
+    df_pivot['Total'] = df_pivot[required_cols].sum(axis=1)
+    df_pivot['Failure'] = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)']
+    
+    df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(
+        lambda x: f"{x:.1f}%" if x == x else "0.0%" 
+    )
+    
+    final_cols = ['Date', 'Jig', 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)', 'Total', 'Failure', 'Failure Rate (%)']
+    summary_df = df_pivot[final_cols].sort_values(by=['Date', 'Jig', 'Test'])
+    
+    # 5. Streamlit에 출력 및 차트 데이터 저장
+    st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+    st.dataframe(summary_df)
+    
+    # [수정] 차트 생성을 위해 summary_df를 세션 상태에 저장합니다.
     st.session_state['summary_df_for_chart'] = summary_df
 
 
@@ -119,7 +144,7 @@ def main():
     st.title("리모컨 생산 데이터 분석 툴") 
     st.markdown("---")
 
-    # 세션 상태 초기화
+    # 세션 상태 초기화 (생략)
     for state_key in ['analysis_results', 'uploaded_files', 'analysis_data', 'analysis_time']:
         if state_key not in st.session_state:
             st.session_state[state_key] = {k: None for k in ANALYSIS_KEYS}
@@ -186,22 +211,26 @@ def main():
     else:
         # --- 테이블 버튼 ---
         if st.session_state.show_summary_table:
-            st.sidebar.button("테이블 숨기기", on_click=set_show_chart_false, key='hide_pcb_table')
+            st.sidebar.button("테이블 숨기기", on_click=set_show_table_false, key='hide_pcb_table')
         else:
-            st.sidebar.button("PCB 요약 테이블 보기", on_click=set_show_chart_true, key='show_pcb_table_btn')
+            st.sidebar.button("PCB 요약 테이블 보기", on_click=set_show_table_true, key='show_pcb_table_btn')
             
         # --- 차트 버튼 ---
         if st.session_state.show_chart:
             st.sidebar.button("차트 숨기기", on_click=set_show_chart_false, key='hide_pcb_chart')
         else:
             st.sidebar.button("PCB 요약 차트 보기", on_click=set_show_chart_only_true, key='show_pcb_chart_btn')
+            
+        # --- 모두 숨기기 버튼 ---
+        if st.session_state.show_summary_table or st.session_state.show_chart:
+            st.sidebar.button("모두 숨기기", on_click=set_hide_all, key='hide_all_results')
         
+        # 다른 분석 항목을 선택하면 테이블/차트 플래그 초기화
         if selected_key != 'Pcb':
-             st.session_state.show_summary_table = False
-             st.session_state.show_chart = False
+             set_hide_all() # 다른 항목 선택 시 숨기기 호출
     
     # --------------------------
-    # MAIN 영역 상하 분할 시작
+    # MAIN 영역 시작
     # --------------------------
     
     # --- 1. 상단 영역 (QC 요약 테이블 및 차트) ---
@@ -214,18 +243,20 @@ def main():
         
         # A) 테이블 출력 로직
         if st.session_state.show_summary_table:
-            generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table)
+            # [수정] 테이블 함수에 props 전달
+            generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
             
         # B) 차트 출력 로직 (테이블 아래에 생성)
         if st.session_state.show_chart:
-            summary_df = st.session_state.get('summary_df_for_chart') # 테이블 생성 함수에서 저장한 DF 사용
+            summary_df = st.session_state.get('summary_df_for_chart') 
             
             if summary_df is not None and not summary_df.empty:
                 st.subheader("QC 결과 누적 막대 그래프")
                 try:
+                    # Altair 차트 생성 및 출력
                     chart_figure = create_stacked_bar_chart(summary_df, 'PCB')
                     if chart_figure:
-                        st.pyplot(chart_figure)
+                        st.altair_chart(chart_figure, use_container_width=True) # st.pyplot 대신 st.altair_chart 사용
                     else:
                         st.error("그래프 생성 중 오류가 발생했습니다.")
                 except Exception as e:
@@ -236,8 +267,7 @@ def main():
     elif st.session_state.show_summary_table or st.session_state.show_chart:
         # 테이블/차트 보기를 눌렀는데 데이터가 없는 경우
         st.error("결과 생성 실패: PCB 분석 데이터가 없거나 필터링 결과 0건입니다.")
-        st.session_state.show_summary_table = False
-        st.session_state.show_chart = False
+        set_hide_all() # 플래그 초기화
             
     st.markdown("---") 
     
@@ -273,8 +303,7 @@ def main():
                             st.session_state.sidebar_columns[key] = final_cols
                             st.session_state.field_mapping[key] = final_cols
                             
-                            st.session_state.show_summary_table = False 
-                            st.session_state.show_chart = False # 분석 재실행 시 차트 상태 초기화
+                            set_hide_all() # 분석 재실행 시 모두 숨기기
                             st.success("분석 완료! 결과가 저장되었습니다.")
                         
             except Exception as e:
