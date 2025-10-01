@@ -100,10 +100,8 @@ def main():
     else:
         # 버튼 표시 로직
         if st.session_state.show_pcb_chart:
-            # 그래프가 보일 때: 숨기기 버튼 표시
             st.sidebar.button("그래프 숨기기", on_click=set_show_chart_false, key='hide_pcb_chart')
         else:
-            # 그래프가 숨겨져 있을 때: 보기 버튼 표시
             st.sidebar.button("PCB QC 요약 그래프 보기", on_click=set_show_chart_true, key='show_pcb_chart_btn')
         
         # 다른 분석 항목을 선택하면 그래프 플래그 초기화
@@ -114,13 +112,37 @@ def main():
     # 3. 메인 화면: 선택된 분석 항목 표시 로직 (UI)
     # ====================================================
     
-    # 그래프를 표시할 위치를 확보하는 빈 컨테이너 (이전 위치)
-    chart_placeholder = st.empty() 
-
     key = selected_key
     props = tab_map[key]
     
     st.header(f"{key.upper()} 데이터 분석")
+    
+    # --- 그래프 출력 위치 (Header 바로 아래) ---
+    df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
+    
+    if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
+        
+        st.markdown("---")
+        st.subheader("PCB 테스트 항목별 QC 결과 그래프") # Header 바로 아래에 작은 Header 추가
+        
+        try:
+            # st.container()를 사용하여 그래프가 다른 요소에 의해 밀리지 않도록 고정합니다.
+            with st.container():
+                with st.spinner("그래프 생성 중..."):
+                    chart_figure = create_stacked_bar_chart(df_pcb_filtered, 'PCB')
+                    
+                    if chart_figure:
+                        st.pyplot(chart_figure)
+                        st.info(f"PCB 데이터 (필터링된 {df_pcb_filtered.shape[0]}건)를 기반으로 그래프가 생성되었습니다.")
+                    else:
+                        st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다.")
+        except Exception as e:
+            st.error(f"그래프 렌더링 중 오류 발생: {e}")
+            st.session_state.show_pcb_chart = False
+            
+    st.markdown("---") # 그래프 출력 영역과 파일 업로드 영역 구분
+    # -----------------------------------------------
+
     st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
     
     if st.session_state.uploaded_files[key]:
@@ -157,31 +179,6 @@ def main():
 
         if st.session_state.analysis_results.get(key) is not None:
             display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
-
-    # ==============================
-    # 4. 푸터(Footer) 위치에 그래프 표시 로직
-    # ==============================
-    df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
-    
-    # 메인 UI가 끝난 후, 페이지의 가장 마지막에 그래프를 렌더링합니다.
-    if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
-        
-        st.markdown("---")
-        st.header("PCB 테스트 항목별 QC 결과 그래프 (Footer)")
-        
-        try:
-            with st.spinner("그래프 생성 중..."):
-                chart_figure = create_stacked_bar_chart(df_pcb_filtered, 'PCB')
-                
-                if chart_figure:
-                    st.pyplot(chart_figure)
-                    st.markdown("---")
-                    st.info(f"PCB 데이터 (필터링된 {df_pcb_filtered.shape[0]}건)를 기반으로 그래프가 생성되었습니다.")
-                else:
-                    st.error("그래프를 생성하는 데 필요한 QC 컬럼을 찾을 수 없거나 데이터가 비어 있습니다.")
-        except Exception as e:
-            st.error(f"그래프 렌더링 중 오류 발생: {e}")
-            st.session_state.show_pcb_chart = False
 
 
 if __name__ == "__main__":
