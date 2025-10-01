@@ -5,8 +5,7 @@ import altair as alt
 
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
-from analysis_main import display_analysis_result # analysis_main에서 main 함수 호출
-# chart_generator.py는 사용하지 않지만, 임포트 구조는 유지합니다.
+from analysis_main import display_analysis_result 
 # from chart_generator import create_stacked_bar_chart 
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
@@ -28,7 +27,7 @@ def set_show_chart_false():
     st.session_state.show_summary_table = False
 
 # ==============================
-# 동적 요약 테이블 생성 함수 (선택된 필드만 반영)
+# 동적 요약 테이블 생성 함수 (선택된 _QC 컬럼만 반영)
 # ==============================
 def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
     """필터링된 DataFrame과 선택된 필드를 사용하여 테스트 항목별 QC 결과 요약 테이블을 생성합니다."""
@@ -36,14 +35,11 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list):
         st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
         return
 
-    # 선택된 필드 목록에서 QC 컬럼만 추출합니다. (예: 'PcbUsbCurr' -> 'PcbUsbCurr_QC')
-    qc_cols_in_fields = [f"{field}_QC" for field in selected_fields if not field.endswith('_QC')]
-    
-    # DF에 실제로 존재하는 QC 컬럼만 사용합니다.
-    qc_columns = [col for col in qc_cols_in_fields if col in df.columns and df[col].dtype == object]
+    # 1. QC 컬럼 식별: selected_fields 중 '_QC'로 끝나는 유효한 컬럼만 통계에 사용합니다.
+    qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
     
     if not qc_columns:
-        st.warning("선택된 상세 내역 필드 중에서 유효한 품질 관리(_QC) 컬럼을 찾을 수 없습니다. '상세 내역'에서 필드를 선택해 주세요.")
+        st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
         return
 
     # 2. 상태 매핑: '데이터 부족'은 '제외'로 처리
@@ -110,12 +106,12 @@ def main():
     st.set_page_config(layout="wide")
     
     # --------------------------
-    # HEADER 영역 시작
+    # HEADER 영역 시작 
     # --------------------------
-    st.title("리모컨 생산 데이터 분석 툴 [Header]")
+    st.title("리모컨 생산 데이터 분석 툴") 
     st.markdown("---")
 
-    # 세션 상태 초기화
+    # 세션 상태 초기화 (생략)
     for state_key in ['analysis_results', 'uploaded_files', 'analysis_data', 'analysis_time']:
         if state_key not in st.session_state:
             st.session_state[state_key] = {k: None for k in ANALYSIS_KEYS}
@@ -129,7 +125,6 @@ def main():
         if f'qc_filter_mode_{key}' not in st.session_state:
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     
-    # 그래프 플래그 이름은 그대로 사용 (show_summary_table)
     if 'show_summary_table' not in st.session_state:
         st.session_state.show_summary_table = False
     
@@ -143,7 +138,7 @@ def main():
     }
     
     # ====================================================
-    # 1. 사이드바: 분석 항목 선택 라디오 버튼 및 설정
+    # 1. 사이드바: 분석 항목 선택 라디오 버튼 및 설정 (생략)
     # ====================================================
     st.sidebar.title("분석 항목 선택")
     
@@ -160,7 +155,6 @@ def main():
     selected_key = next(key for key, label in analysis_options.items() if label == selected_analysis_label)
     st.session_state.last_selected_analysis_key = selected_key
     
-    # 사이드바에 현재 데이터 컬럼 목록 표시
     st.sidebar.markdown("---")
     st.sidebar.subheader("현재 데이터 컬럼")
     if selected_key in st.session_state.sidebar_columns and st.session_state.sidebar_columns[selected_key]:
@@ -169,7 +163,7 @@ def main():
         st.sidebar.info("분석 실행 후 컬럼 목록이 표시됩니다.")
 
     # ====================================================
-    # 2. 사이드바: 테이블 표시 버튼 배치
+    # 2. 사이드바: 테이블 표시 버튼 배치 (생략)
     # ====================================================
     st.sidebar.markdown("---")
     st.sidebar.subheader("QC 결과 시각화")
@@ -179,94 +173,96 @@ def main():
     if df_pcb is None or df_pcb.empty:
         st.sidebar.warning("'파일 Pcb 분석' 실행 후 버튼이 나타납니다.")
     else:
-        # 버튼 표시 로직
         if st.session_state.show_summary_table:
             st.sidebar.button("테이블 숨기기", on_click=set_show_chart_false, key='hide_pcb_table')
         else:
-            # 테이블 보기 버튼 (클릭 시 show_summary_table 플래그를 True로 설정)
             st.sidebar.button("PCB 요약 테이블 보기", on_click=set_show_chart_true, key='show_pcb_table_btn')
         
-        # 다른 분석 항목을 선택하면 테이블 플래그 초기화
         if selected_key != 'Pcb':
              st.session_state.show_summary_table = False
     
     # --------------------------
-    # MAIN 영역 시작
+    # MAIN 영역 2등분 시작
     # --------------------------
-    st.markdown("---")
-    st.markdown("## [Main Content Start]")
-    st.markdown("---")
     
-    # --- 요약 테이블 출력 위치 (Main Content 상단) ---
-    df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
+    # 메인 화면을 분석 섹션 (왼쪽, 2/3)과 테이블 섹션 (오른쪽, 1/3)으로 나눕니다.
+    main_col, table_col = st.columns([2, 1]) 
     
-    if st.session_state.show_summary_table:
+    # --- 1. 왼쪽 컬럼 (분석 실행 및 상세 내역) ---
+    with main_col:
         
-        # detail_display에서 저장된 선택 필드 목록을 가져옵니다.
-        # analysis_key가 'Pcb'일 때의 필드 목록을 사용합니다.
-        selected_fields_for_table = st.session_state.get(f'detail_fields_select_Pcb', [])
-        
-        # 데이터 유효성 검사 (필터링된 DF가 존재하고 비어있지 않은지)
-        if df_pcb_filtered is not None and not df_pcb_filtered.empty:
-            # 테이블 함수에 선택된 필드 목록을 전달합니다.
-            generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table)
-        else:
-            # 이 에러 메시지는 'Pcb 분석 실행' 자체가 실패했거나 필터링 결과 0건일 때 나옵니다.
-            st.error("테이블 생성 실패: 필터링된 PCB 데이터가 없거나 비어 있습니다. 'Pcb 분석 실행'을 확인하고 필터(날짜/Jig)를 해제해보세요.")
-            st.session_state.show_summary_table = False # 플래그 해제 (버튼 재표시 유도)
-            
-    st.markdown("---") 
-    # -----------------------------------------------
+        # st.markdown("## [Main Content Start]") # 주석 처리
+        st.markdown("---") 
 
-    key = selected_key
-    props = tab_map[key]
-    
-    st.header(f"분석 대상: {key.upper()} 데이터 분석")
-    
-    st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
-    
-    if st.session_state.uploaded_files[key]:
-        if st.button(f"{key.upper()} 분석 실행", key=f"analyze_{key}"):
-            try:
-                df = props['reader'](st.session_state.uploaded_files[key])
-                
-                if df is None or df.empty:
-                    st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
-                    st.session_state.analysis_results[key] = None
-                else:
-                    if props['jig_col'] not in df.columns or props['timestamp_col'] not in df.columns:
-                        st.error(f"데이터에 필수 컬럼 ('{props['jig_col']}', '{props['timestamp_col']}')이 없습니다. 파일을 다시 확인해주세요.")
+        key = selected_key
+        props = tab_map[key]
+        
+        st.header(f"분석 대상: {key.upper()} 데이터 분석")
+        
+        st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
+        
+        if st.session_state.uploaded_files[key]:
+            if st.button(f"{key.upper()} 분석 실행", key=f"analyze_{key}"):
+                try:
+                    df = props['reader'](st.session_state.uploaded_files[key])
+                    
+                    if df is None or df.empty:
+                        st.error(f"{key.upper()} 데이터 파일을 읽을 수 없거나 내용이 비어 있습니다. 파일 형식을 확인해주세요.")
                         st.session_state.analysis_results[key] = None
                     else:
-                        with st.spinner("데이터 분석 및 저장 중..."):
-                            summary_data, all_dates = props['analyzer'](df)
-                            st.session_state.analysis_data[key] = (summary_data, all_dates)
-                            st.session_state.analysis_results[key] = df.copy() 
-                            st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        if props['jig_col'] not in df.columns or props['timestamp_col'] not in df.columns:
+                            st.error(f"데이터에 필수 컬럼 ('{props['jig_col']}', '{props['timestamp_col']}')이 없습니다. 파일을 다시 확인해주세요.")
+                            st.session_state.analysis_results[key] = None
+                        else:
+                            with st.spinner("데이터 분석 및 저장 중..."):
+                                summary_data, all_dates = props['analyzer'](df)
+                                st.session_state.analysis_data[key] = (summary_data, all_dates)
+                                st.session_state.analysis_results[key] = df.copy() 
+                                st.session_state.analysis_time[key] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                                
+                                final_df = st.session_state.analysis_results[key]
+                                final_cols = final_df.columns.tolist()
+                                st.session_state.sidebar_columns[key] = final_cols
+                                st.session_state.field_mapping[key] = final_cols
+                                
+                                st.session_state.show_summary_table = False 
+                                st.success("분석 완료! 결과가 저장되었습니다.")
                             
-                            final_df = st.session_state.analysis_results[key]
-                            final_cols = final_df.columns.tolist()
-                            st.session_state.sidebar_columns[key] = final_cols
-                            st.session_state.field_mapping[key] = final_cols
-                            
-                            st.session_state.show_summary_table = False 
-                            st.success("분석 완료! 결과가 저장되었습니다.")
-                        
-            except Exception as e:
-                print(f"Error during {key} analysis: {e}") 
-                st.error(f"분석 중 오류 발생: {e}")
-                st.session_state.analysis_results[key] = None
+                except Exception as e:
+                    print(f"Error during {key} analysis: {e}") 
+                    st.error(f"분석 중 오류 발생: {e}")
+                    st.session_state.analysis_results[key] = None
 
-        if st.session_state.analysis_results.get(key) is not None:
-            # 상세 분석 결과
-            display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
+            if st.session_state.analysis_results.get(key) is not None:
+                # 상세 분석 결과 (기간 요약, 상세 내역 등)
+                display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
+        
+        st.markdown("---") # 왼쪽 컬럼의 끝 구분선
+
+    # --- 2. 오른쪽 컬럼 (QC 요약 테이블) ---
+    with table_col:
+        st.subheader("QC 결과 요약")
+        st.caption("선택된 필터에 따라 동적으로 변경됩니다.")
+        
+        # 요약 테이블 출력 로직
+        df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
+        
+        if st.session_state.show_summary_table:
             
+            selected_fields_for_table = st.session_state.get(f'detail_fields_select_Pcb', [])
+            
+            if df_pcb_filtered is not None and not df_pcb_filtered.empty:
+                # 테이블 생성 함수 호출
+                generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table)
+            else:
+                st.warning("테이블을 표시할 데이터가 없거나 필터링 결과 0건입니다.")
+                # st.session_state.show_summary_table = False # 플래그 해제
+                
     # --------------------------
-    # FOOTER 영역 시작
+    # FOOTER 영역 시작 
     # --------------------------
     st.markdown("---")
-    st.markdown("## [Footer Content Start]")
-    st.markdown("데이터 분석 툴 v1.0 | Google Gemini 기반 분석")
+    st.markdown("데이터 분석 툴 v1.0 | Google Gemini 기반 분석") 
     st.markdown("---")
 
 
