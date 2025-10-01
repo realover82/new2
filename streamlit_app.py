@@ -31,10 +31,14 @@ def set_show_chart_false():
 # ==============================
 def main():
     st.set_page_config(layout="wide")
-    st.title("리모컨 생산 데이터 분석 툴")
+    
+    # --------------------------
+    # HEADER 영역 시작
+    # --------------------------
+    st.title("리모컨 생산 데이터 분석 툴 [Header]")
     st.markdown("---")
 
-    # 세션 상태 초기화
+    # 세션 상태 초기화 (생략)
     for state_key in ['analysis_results', 'uploaded_files', 'analysis_data', 'analysis_time']:
         if state_key not in st.session_state:
             st.session_state[state_key] = {k: None for k in ANALYSIS_KEYS}
@@ -51,7 +55,6 @@ def main():
     if 'show_pcb_chart' not in st.session_state:
         st.session_state.show_pcb_chart = False
     
-    # 분석 탭 정보를 담은 최종 맵
     tab_map = {
         key: {
             **TAB_PROPS_MAP[key], 
@@ -108,25 +111,27 @@ def main():
         if selected_key != 'Pcb':
              st.session_state.show_pcb_chart = False
     
-    # ====================================================
-    # 3. 메인 화면: 선택된 분석 항목 표시 로직 (UI)
-    # ====================================================
+    # --------------------------
+    # MAIN 영역 시작
+    # --------------------------
+    st.markdown("---")
+    st.markdown("## [Main Content Start]")
+    st.markdown("---")
     
     key = selected_key
     props = tab_map[key]
     
-    st.header(f"{key.upper()} 데이터 분석")
+    st.header(f"분석 대상: {key.upper()} 데이터 분석")
     
-    # --- 그래프 출력 위치 (Header 바로 아래) ---
+    # --- 그래프 출력 위치 (Main Content 상단) ---
     df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
     
     if st.session_state.show_pcb_chart and df_pcb_filtered is not None and not df_pcb_filtered.empty:
         
         st.markdown("---")
-        st.subheader("PCB 테스트 항목별 QC 결과 그래프") # Header 바로 아래에 작은 Header 추가
+        st.subheader("PCB 테스트 항목별 QC 결과 그래프") 
         
         try:
-            # st.container()를 사용하여 그래프가 다른 요소에 의해 밀리지 않도록 고정합니다.
             with st.container():
                 with st.spinner("그래프 생성 중..."):
                     chart_figure = create_stacked_bar_chart(df_pcb_filtered, 'PCB')
@@ -140,7 +145,7 @@ def main():
             st.error(f"그래프 렌더링 중 오류 발생: {e}")
             st.session_state.show_pcb_chart = False
             
-    st.markdown("---") # 그래프 출력 영역과 파일 업로드 영역 구분
+    st.markdown("---") 
     # -----------------------------------------------
 
     st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
@@ -178,7 +183,16 @@ def main():
                 st.session_state.analysis_results[key] = None
 
         if st.session_state.analysis_results.get(key) is not None:
+            # 상세 분석 결과 (Main Content의 주요 부분)
             display_analysis_result(key, st.session_state.uploaded_files[key].name, TAB_PROPS_MAP[key])
+            
+    # --------------------------
+    # FOOTER 영역 시작 (Main Content의 모든 요소가 끝난 지점)
+    # --------------------------
+    st.markdown("---")
+    st.markdown("## [Footer Content Start]")
+    st.markdown("데이터 분석 툴 v1.0 | Google Gemini 기반 분석")
+    st.markdown("---")
 
 
 if __name__ == "__main__":
