@@ -6,7 +6,7 @@ import streamlit as st
 def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
     """
     QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
-    [수정됨]: 텍스트 레이어의 불필요한 color 인코딩 제거로 렌더링 오류 해결.
+    [수정됨]: 텍스트 레이어의 그룹화(groupby) 기준에 'Date', 'Jig'를 추가하여 렌더링 오류를 해결했습니다.
     """
     if summary_df.empty:
         st.warning("Chart Debug: 입력 summary_df가 비어있습니다. 차트 생성 불가.")
@@ -60,15 +60,15 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         x=alt.X('Test', sort=None),
         y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
         text=alt.Text('sum(Count)', format=',.0f'),
-        # [핵심 수정]: color 인코딩 제거 (chart_text.mark_text에 묶여있었음)
+        color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
     ).mark_text(
         align='center',
         baseline='bottom',
-        dy=-5,
-        color='black' # 텍스트 색상을 직접 지정하여 충돌 방지
+        dy=-5
     ).transform_aggregate(
         total_count='sum(Count)',
-        groupby=['Test'] 
+        # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
+        groupby=['Test', 'Date', 'Jig'] 
     )
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
