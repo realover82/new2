@@ -19,13 +19,21 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     )
     
     # 0인 값은 제거하여 차트를 깔끔하게 만듭니다.
+    df_long = df_long[df_long['Status'] != 'Pass'] 
     df_long = df_long[df_long['Count'] > 0]
     
-    # 순서 정의
-    status_order = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+    # # 순서 정의
+    # status_order = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+    # color_scale = alt.Scale(
+    #     domain=status_order,
+    #     range=['#4CAF50', '#FF9800', '#F44336', '#9E9E9E']
+    # )
+    
+    # 순서 정의 (Pass 제외)
+    status_order = ['미달 (Under)', '초과 (Over)', '제외 (Excluded)']
     color_scale = alt.Scale(
         domain=status_order,
-        range=['#4CAF50', '#FF9800', '#F44336', '#9E9E9E']
+        range=['#FF9800', '#F44336', '#9E9E9E'] # Pass 색상 제외
     )
 
     base = alt.Chart(df_long).encode(
