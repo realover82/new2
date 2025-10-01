@@ -6,8 +6,8 @@ import altair as alt
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_display import display_analysis_result
-# chart_generator.py는 사용하지 않으므로 임포트를 제거합니다.
-# from chart_generator import create_stacked_bar_chart # 제거됨
+# chart_generator.py는 사용하지 않지만, 임포트 구조는 유지합니다.
+# from chart_generator import create_stacked_bar_chart 
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 from csv2 import read_csv_with_dynamic_header, analyze_data
@@ -28,28 +28,76 @@ def set_show_chart_false():
     st.session_state.show_summary_table = False
 
 # ==============================
-# 새로운 테이블 생성 및 표시 함수
+# 동적 요약 테이블 생성 함수 (그래프 데이터 구조와 유사)
 # ==============================
-def show_summary_table():
-    """요청하신 고정된 테스트 결과 요약 테이블을 DataFrame으로 만들어 표시합니다."""
-    data = {
-        'Test': ['PcbUsbCurr', 'PcbBatVolt', 'PcbWirelessVolt', 'PcbSleepCurr', 'PcbLed', 'PcbIrPwr', 'PcbIrCurr'],
-        'Pass': [77, 86, 86, 67, 72, 40, 21],
-        '미달 (Under)': [9, 0, 0, 0, 6, 0, 15],
-        '초과 (Over)': [0, 0, 0, 2, 0, 0, 0],
-        '제외 (Excluded)': [0, 0, 0, 17, 8, 46, 50],
-        'Total': [86, 86, 86, 86, 86, 86, 86],
-        'Failure': [9, 0, 0, 2, 6, 0, 15],
-        'Failure Rate (%)': ['10.5%', '0.0%', '0.0%', '2.3%', '7.0%', '0.0%', '17.4%']
+def generate_dynamic_summary_table(df: pd.DataFrame):
+    """필터링된 DataFrame을 사용하여 테스트 항목별 QC 결과 요약 테이블을 생성합니다."""
+    if df.empty:
+        st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
+        return
+
+    # 1. QC 컬럼 식별
+    qc_columns = [col for col in df.columns if col.endswith('_QC')]
+    if not qc_columns:
+        st.warning("데이터에서 '_QC'로 끝나는 품질 관리 컬럼을 찾을 수 없습니다.")
+        return
+
+    # 2. 상태 매핑: '데이터 부족'은 '제외'로 처리
+    status_map = {
+        'Pass': 'Pass',
+        '미달': '미달 (Under)',
+        '초과': '초과 (Over)',
+        '제외': '제외 (Excluded)',
+        '데이터 부족': '제외 (Excluded)' 
     }
-    df_summary = pd.DataFrame(data).set_index('Test')
+    
+    summary_data_list = []
+    
+    for qc_col in qc_columns:
+        test_name = qc_col.replace('_QC', '')
+        
+        # 상태 카운트 집계
+        status_counts = df[qc_col].value_counts().to_dict()
+        
+        row = {'Test': test_name}
+        total_count = 0
+        failure_count = 0
+        
+        result_counts = {
+            'Pass': 0, 
+            '미달 (Under)': 0, 
+            '초과 (Over)': 0, 
+            '제외 (Excluded)': 0
+        }
+        
+        for status, count in status_counts.items():
+            mapped_status = status_map.get(status)
+            if mapped_status:
+                result_counts[mapped_status] += count
+                total_count += count
+                
+                # '미달'과 '초과'만 불량(Failure)으로 간주
+                if mapped_status in ['미달 (Under)', '초과 (Over)']:
+                    failure_count += count
+        
+        # 행 데이터 생성
+        row['Pass'] = result_counts['Pass']
+        row['미달 (Under)'] = result_counts['미달 (Under)']
+        row['초과 (Over)'] = result_counts['초과 (Over)']
+        row['제외 (Excluded)'] = result_counts['제외 (Excluded)']
+        row['Total'] = total_count
+        row['Failure'] = failure_count
+        row['Failure Rate (%)'] = f"{(failure_count / total_count * 100):.1f}%" if total_count > 0 else "0.0%"
+        
+        summary_data_list.append(row)
+        
+    # 최종 DataFrame 생성
+    summary_df = pd.DataFrame(summary_data_list).set_index('Test')
     
     st.markdown("---")
-    st.subheader("PCB 테스트 결과 요약 테이블 (고정 데이터)")
-    st.dataframe(df_summary)
+    st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (동적)")
+    st.dataframe(summary_df)
     st.markdown("---")
-    st.info("이 테이블은 버튼 기능 구현을 위해 임시로 삽입된 고정 데이터입니다. 실제 분석 결과와는 무관합니다.")
-    
 
 # ==============================
 # 메인 실행 함수
@@ -77,7 +125,7 @@ def main():
         if f'qc_filter_mode_{key}' not in st.session_state:
             st.session_state[f'qc_filter_mode_{key}'] = 'None'
     
-    # 그래프 플래그 이름을 테이블 플래그로 변경
+    # 그래프 플래그 이름은 그대로 사용 (show_summary_table)
     if 'show_summary_table' not in st.session_state:
         st.session_state.show_summary_table = False
     
@@ -120,7 +168,7 @@ def main():
     # 2. 사이드바: 테이블 표시 버튼 배치
     # ====================================================
     st.sidebar.markdown("---")
-    st.sidebar.subheader("결과 요약 테이블")
+    st.sidebar.subheader("QC 결과 시각화")
 
     df_pcb = st.session_state.analysis_results.get('Pcb')
     
@@ -146,8 +194,14 @@ def main():
     st.markdown("---")
     
     # --- 요약 테이블 출력 위치 (Main Content 상단) ---
+    df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
+    
     if st.session_state.show_summary_table:
-        show_summary_table() # 고정된 테이블 표시 함수 호출
+        if df_pcb_filtered is not None and not df_pcb_filtered.empty:
+            generate_dynamic_summary_table(df_pcb_filtered) # 동적 테이블 생성
+        else:
+            st.warning("테이블을 생성하려면 '파일 Pcb 분석'에서 데이터를 로드하고 필터링된 결과가 1건 이상 있어야 합니다.")
+            st.session_state.show_summary_table = False # 데이터 없으면 플래그 해제
             
     st.markdown("---") 
     # -----------------------------------------------
@@ -157,7 +211,6 @@ def main():
     
     st.header(f"분석 대상: {key.upper()} 데이터 분석")
     
-    # 파일 업로드 및 분석 실행 로직 (생략)
     st.session_state.uploaded_files[key] = st.file_uploader(f"{key.upper()} 파일을 선택하세요", type=["csv"], key=f"uploader_{key}")
     
     if st.session_state.uploaded_files[key]:
