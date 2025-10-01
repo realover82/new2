@@ -39,7 +39,7 @@ def display_analysis_result(analysis_key, file_name, props):
     # =======================================================
     
     # --- 기본 필터링 (Jig, 날짜 범위) ---
-    st.subheader("기본 필터링")
+    st.subheader("기본 필터링 (날짜 필터링 비활성화)")
     
     # --- DEBUG 0: 원본 데이터 확인 ---
     if analysis_key == 'Pcb':
@@ -49,6 +49,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     with filter_col1:
         jig_list = sorted(df_raw[props['jig_col']].dropna().unique().tolist()) if props['jig_col'] in df_raw.columns else []
+        # Jig 필터는 유지하되, 전체 데이터를 기본값으로 설정
         selected_jig = st.selectbox("PC(Jig) 선택", ["전체"] + jig_list, key=f"jig_select_{analysis_key}") 
     
     if not all_dates:
@@ -59,6 +60,7 @@ def display_analysis_result(analysis_key, file_name, props):
     max_date = max(all_dates)
 
     with filter_col2:
+        # 날짜 필터링 UI는 유지 (선택만 가능)
         start_date = st.date_input("시작 날짜", min_value=min_date, max_value=max_date, value=min_date, key=f"start_date_{analysis_key}")
     with filter_col3:
         end_date = st.date_input("종료 날짜", min_value=min_date, max_value=max_date, value=max_date, key=f"end_date_{analysis_key}")
@@ -69,31 +71,11 @@ def display_analysis_result(analysis_key, file_name, props):
     
     # --- 1. 필터링된 원본 DataFrame (그래프 연동을 위한 핵심) ---
     timestamp_col = props['timestamp_col']
-    df_filtered = pd.DataFrame() # 초기화
-
-    # === 핵심 수정: 날짜 컬럼을 강제로 datetime 타입으로 변환 ===
-    try:
-        # 오류가 발생할 수 있는 컬럼을 안전하게 복사하고 변환 시도
-        df_temp = df_raw.copy()
-        df_temp['__DATE_TEMP__'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
-        df_temp = df_temp.dropna(subset=['__DATE_TEMP__']) # 변환 실패(NaT)한 행 제거
-
-        df_filtered = df_temp[
-            (df_temp['__DATE_TEMP__'] >= start_date) & 
-            (df_temp['__DATE_TEMP__'] <= end_date)
-        ].drop(columns=['__DATE_TEMP__']).copy() # 임시 컬럼 제거
-        
-        # --- DEBUG 1: 날짜 필터링 후 확인 ---
-        if analysis_key == 'Pcb':
-            st.info(f"DEBUG 1: 날짜 필터링 후 행 수: {df_filtered.shape[0]} ({start_date} ~ {end_date})")
-
-    except Exception as e:
-        # 날짜 변환 자체에서 심각한 오류 발생 시
-        st.error(f"DEBUG ERROR: 날짜 컬럼 '{timestamp_col}' 변환 중 심각한 오류 발생. ({e}) 분석 함수 확인 필요.")
-        # df_filtered는 비어있는 상태로 유지됨
-    # ========================================================
-
-    # Jig 필터링
+    
+    # === 핵심 수정: 날짜 필터링 로직 건너뛰기 ===
+    df_filtered = df_raw.copy() # 원본 데이터를 그대로 사용
+    
+    # Jig 필터링만 적용
     if selected_jig != "전체" and not df_filtered.empty:
         df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
         # --- DEBUG 2: Jig 필터링 후 확인 ---
@@ -114,11 +96,14 @@ def display_analysis_result(analysis_key, file_name, props):
 
     if df_filtered.empty:
         st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다. (0 행)")
+        # Jig 필터링으로 인해 0행이 되었을 수 있으므로 테이블 표시 플래그 해제
+        st.session_state['show_summary_table'] = False 
         return
 
     # 이후 로직은 df_filtered를 기반으로 진행됨
     
-    # 여기서 df_filtered[props['timestamp_col']]은 원본 타입이므로, 날짜 집계는 all_dates를 기준으로 함
+    # 날짜 집계는 모든 날짜를 사용하거나 필터 UI에서 선택된 날짜를 사용하지만,
+    # 여기서는 테이블 표시를 위해 필터 UI와 상관없이 전체 날짜 범위만 사용합니다.
     filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
     
     st.write(f"**분석 시간**: {st.session_state.analysis_time[analysis_key]}")
@@ -129,7 +114,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     daily_aggregated_data = {}
     
-    date_range_for_aggregation = filtered_dates # 필터링된 날짜 목록 사용
+    date_range_for_aggregation = all_dates # 필터링 UI와 상관없이 전체 날짜 사용
 
     for date_obj in date_range_for_aggregation:
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
@@ -144,13 +129,14 @@ def display_analysis_result(analysis_key, file_name, props):
     st.subheader("기간 요약")
     
     if date_range_for_aggregation:
+        # 요약 테이블에는 선택된 UI 날짜 범위만 보여줌 (데이터는 전체를 사용)
         summary_df_data = {
-            '날짜': [d.strftime('%m-%d') for d in date_range_for_aggregation],
-            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in date_range_for_aggregation],
-            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in date_range_for_aggregation],
-            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in date_range_for_aggregation],
-            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in date_range_for_aggregation],
-            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in date_range_for_aggregation]
+            '날짜': [d.strftime('%m-%d') for d in filtered_dates],
+            '총 테스트 수': [daily_aggregated_data.get(d, {}).get('total_test', 0) for d in filtered_dates],
+            'PASS': [daily_aggregated_data.get(d, {}).get('pass', 0) for d in filtered_dates],
+            '가성불량': [daily_aggregated_data.get(d, {}).get('false_defect', 0) for d in filtered_dates],
+            '진성불량': [daily_aggregated_data.get(d, {}).get('true_defect', 0) for d in filtered_dates],
+            'FAIL': [daily_aggregated_data.get(d, {}).get('fail', 0) for d in filtered_dates]
         }
         summary_df = pd.DataFrame(summary_df_data).set_index('날짜')
         st.dataframe(summary_df.transpose())
