@@ -39,7 +39,7 @@ def display_analysis_result(analysis_key, file_name, props):
     # =======================================================
     
     # --- 기본 필터링 (Jig, 날짜 범위) ---
-    st.subheader("기본 필터링 (날짜 필터링 비활성화)")
+    st.subheader("기본 필터링 (필터링 로직 전체 비활성화)")
     
     # --- DEBUG 0: 원본 데이터 확인 ---
     if analysis_key == 'Pcb':
@@ -49,7 +49,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     with filter_col1:
         jig_list = sorted(df_raw[props['jig_col']].dropna().unique().tolist()) if props['jig_col'] in df_raw.columns else []
-        # Jig 필터는 유지하되, 전체 데이터를 기본값으로 설정
+        # UI는 유지
         selected_jig = st.selectbox("PC(Jig) 선택", ["전체"] + jig_list, key=f"jig_select_{analysis_key}") 
     
     if not all_dates:
@@ -60,61 +60,55 @@ def display_analysis_result(analysis_key, file_name, props):
     max_date = max(all_dates)
 
     with filter_col2:
-        # 날짜 필터링 UI는 유지 (선택만 가능)
+        # UI는 유지
         start_date = st.date_input("시작 날짜", min_value=min_date, max_value=max_date, value=min_date, key=f"start_date_{analysis_key}")
     with filter_col3:
+        # UI는 유지
         end_date = st.date_input("종료 날짜", min_value=min_date, max_value=max_date, value=max_date, key=f"end_date_{analysis_key}")
 
     if start_date > end_date:
         st.error("시작 날짜는 종료 날짜보다 이전이어야 합니다.")
         return
     
-    # --- 1. 필터링된 원본 DataFrame (그래프 연동을 위한 핵심) ---
-    timestamp_col = props['timestamp_col']
+    # --- 1. 필터링된 원본 DataFrame (테이블 연동을 위한 핵심) ---
     
-    # === 핵심 수정: 날짜 필터링 로직 건너뛰기 ===
-    df_filtered = df_raw.copy() # 원본 데이터를 그대로 사용
+    # === 핵심 수정: df_raw를 df_filtered로 바로 사용 ===
+    df_filtered = df_raw.copy() 
     
-    # Jig 필터링만 적용
-    if selected_jig != "전체" and not df_filtered.empty:
-        df_filtered = df_filtered[df_filtered[props['jig_col']] == selected_jig].copy()
-        # --- DEBUG 2: Jig 필터링 후 확인 ---
-        if analysis_key == 'Pcb':
-             st.info(f"DEBUG 2: Jig 필터링 후 행 수: {df_filtered.shape[0]} (Jig: {selected_jig})")
-        
-    # 세션 상태에 필터링된 DF 저장
+    # 세션 상태에 필터링된 DF 저장 (이제 원본 DF가 저장됨)
     st.session_state[f'filtered_df_{analysis_key}'] = df_filtered.copy()
     # --------------------------------------------------------------------
 
     # --- 최종 상태 확인 ---
     if analysis_key == 'Pcb':
         if df_filtered.empty:
-            st.error("DEBUG FINAL: 필터링된 DF가 최종적으로 비어있습니다. 테이블/그래프 생성 불가.")
+            # 원본 DF가 비어있는 경우
+            st.error("DEBUG FINAL: 원본 데이터가 비어있습니다. 테이블 생성 불가.")
         else:
             st.success(f"DEBUG FINAL: 필터링된 DF 최종 행 수: {df_filtered.shape[0]} (테이블 생성 가능)")
     # -----------------------------------------
 
     if df_filtered.empty:
         st.warning("선택된 필터 조건에 해당하는 데이터가 없습니다. (0 행)")
-        # Jig 필터링으로 인해 0행이 되었을 수 있으므로 테이블 표시 플래그 해제
+        # 원본 데이터가 비어있으면 테이블 생성 플래그 해제
         st.session_state['show_summary_table'] = False 
         return
 
-    # 이후 로직은 df_filtered를 기반으로 진행됨
+    # 이후 로직은 df_filtered(원본 DF)를 기반으로 진행됨
     
-    # 날짜 집계는 모든 날짜를 사용하거나 필터 UI에서 선택된 날짜를 사용하지만,
-    # 여기서는 테이블 표시를 위해 필터 UI와 상관없이 전체 날짜 범위만 사용합니다.
+    # 날짜 집계는 UI에서 선택된 날짜 범위 (filtered_dates)와 Jig (jigs_to_display)를 사용
     filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
     
     st.write(f"**분석 시간**: {st.session_state.analysis_time[analysis_key]}")
     st.markdown("---")
 
     # --- 데이터 집계 ---
+    # 요약 테이블과 상세 내역은 사용자가 UI에서 선택한 필터(Jig, 날짜)를 따릅니다.
     jigs_to_display = jig_list if selected_jig == "전체" else [selected_jig]
     
     daily_aggregated_data = {}
     
-    date_range_for_aggregation = all_dates # 필터링 UI와 상관없이 전체 날짜 사용
+    date_range_for_aggregation = filtered_dates # UI 필터에 맞는 날짜만 사용
 
     for date_obj in date_range_for_aggregation:
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
