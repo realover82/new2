@@ -71,19 +71,27 @@ def display_analysis_result(analysis_key, file_name, props):
     timestamp_col = props['timestamp_col']
     df_filtered = pd.DataFrame() # 초기화
 
-    # **날짜 컬럼이 datetime.date 타입인지 확인하고 필터링합니다.**
-    if pd.api.types.is_datetime64_any_dtype(df_raw[timestamp_col]):
-        df_filtered = df_raw[
-            (df_raw[timestamp_col].dt.date >= start_date) & 
-            (df_raw[timestamp_col].dt.date <= end_date)
-        ].copy()
+    # === 핵심 수정: 날짜 컬럼을 강제로 datetime 타입으로 변환 ===
+    try:
+        # 오류가 발생할 수 있는 컬럼을 안전하게 복사하고 변환 시도
+        df_temp = df_raw.copy()
+        df_temp['__DATE_TEMP__'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
+        df_temp = df_temp.dropna(subset=['__DATE_TEMP__']) # 변환 실패(NaT)한 행 제거
+
+        df_filtered = df_temp[
+            (df_temp['__DATE_TEMP__'] >= start_date) & 
+            (df_temp['__DATE_TEMP__'] <= end_date)
+        ].drop(columns=['__DATE_TEMP__']).copy() # 임시 컬럼 제거
+        
         # --- DEBUG 1: 날짜 필터링 후 확인 ---
         if analysis_key == 'Pcb':
             st.info(f"DEBUG 1: 날짜 필터링 후 행 수: {df_filtered.shape[0]} ({start_date} ~ {end_date})")
-    else:
-        # 날짜 컬럼 타입 오류 디버깅
-        st.error(f"DEBUG ERROR: 컬럼 '{timestamp_col}'이 datetime 타입이 아닙니다. (현재 타입: {df_raw[timestamp_col].dtype}). 분석 함수를 확인하세요.")
-        # 이 경우 df_filtered는 비어있는 상태로 유지됨
+
+    except Exception as e:
+        # 날짜 변환 자체에서 심각한 오류 발생 시
+        st.error(f"DEBUG ERROR: 날짜 컬럼 '{timestamp_col}' 변환 중 심각한 오류 발생. ({e}) 분석 함수 확인 필요.")
+        # df_filtered는 비어있는 상태로 유지됨
+    # ========================================================
 
     # Jig 필터링
     if selected_jig != "전체" and not df_filtered.empty:
@@ -109,7 +117,9 @@ def display_analysis_result(analysis_key, file_name, props):
         return
 
     # 이후 로직은 df_filtered를 기반으로 진행됨
-    filtered_dates = sorted(df_filtered[props['timestamp_col']].dt.date.unique().tolist())
+    
+    # 여기서 df_filtered[props['timestamp_col']]은 원본 타입이므로, 날짜 집계는 all_dates를 기준으로 함
+    filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
     
     st.write(f"**분석 시간**: {st.session_state.analysis_time[analysis_key]}")
     st.markdown("---")
@@ -119,7 +129,7 @@ def display_analysis_result(analysis_key, file_name, props):
     
     daily_aggregated_data = {}
     
-    date_range_for_aggregation = [date for date in all_dates if start_date <= date <= end_date]
+    date_range_for_aggregation = filtered_dates # 필터링된 날짜 목록 사용
 
     for date_obj in date_range_for_aggregation:
         daily_totals = {key: 0 for key in ['total_test', 'pass', 'false_defect', 'true_defect', 'fail']}
