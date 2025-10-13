@@ -210,7 +210,7 @@ def main():
         summary_df_temp = generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
         if summary_df_temp is not None:
             summary_df_display = summary_df_temp # 성공적으로 DF가 반환된 경우에만 저장
-            # st.session_state['summary_df_for_chart'] = summary_df_temp # 차트용 세션 데이터도 갱신
+            st.session_state['summary_df_for_chart'] = summary_df_temp # 차트용 세션 데이터도 갱신
         
 
         # try:
@@ -276,17 +276,45 @@ def main():
     #     else:
     #          st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
 
-    # B) 차트 출력 로직 (st.bar_chart 사용)
+    # # B) 차트 출력 로직 (st.bar_chart 사용)
+    # if st.session_state.show_chart:
+    #     summary_df = st.session_state.get('summary_df_for_chart') 
+        
+    #     if summary_df is not None and not summary_df.empty:
+    #         st.subheader("QC 결과 막대 그래프 (Jig별 분리)")
+    #         try:
+    #             # [수정] chart_generator의 함수 호출 (jig_separated=True)
+    #             create_simple_bar_chart(summary_df, 'PCB', jig_separated=True) 
+    #         except Exception as e:
+    #             st.error(f"그래프 렌더링 중 오류 발생: {e}")
+    #     else:
+    #          st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
+    
+    # # B) 차트 출력 로직 (3개 차트 분리)
     if st.session_state.show_chart:
         summary_df = st.session_state.get('summary_df_for_chart') 
         
         if summary_df is not None and not summary_df.empty:
-            st.subheader("QC 결과 막대 그래프 (Jig별 분리)")
-            try:
-                # [수정] chart_generator의 함수 호출 (jig_separated=True)
-                create_simple_bar_chart(summary_df, 'PCB', jig_separated=True) 
-            except Exception as e:
-                st.error(f"그래프 렌더링 중 오류 발생: {e}")
+            st.subheader("QC 결과 분할 차트")
+            
+            # 메인 화면을 3개의 컬럼으로 분할
+            chart_col1, chart_col2, chart_col3 = st.columns(3)
+
+            # 1. 상세 분리 차트 (Date/Jig/Test)
+            with chart_col1:
+                st.info("차트 1: 상세 분리 (날짜/Jig/Test)")
+                create_simple_bar_chart(summary_df, "상세 분리", 'Date_Jig_Test')
+
+            # 2. 날짜별 합산 차트
+            with chart_col2:
+                st.info("차트 2: 날짜별 합산")
+                create_simple_bar_chart(summary_df, "날짜별 합산", 'Date')
+
+            # 3. Test 항목별 합산 차트
+            with chart_col3:
+                st.info("차트 3: 테스트 항목별 합산")
+                create_simple_bar_chart(summary_df, "테스트 항목별 합산", 'Test')
+            
         else:
              st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
     
