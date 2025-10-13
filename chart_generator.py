@@ -9,7 +9,7 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     [수정됨]: 텍스트 레이어의 그룹화(groupby) 기준에 'Date', 'Jig'를 추가하여 렌더링 오류를 해결했습니다.
     """
     if summary_df.empty:
-        st.warning("Chart Debug: 입력 summary_df가 비어있습니다. 차트 생성 불가.")
+        # st.warning("Chart Debug: 입력 summary_df가 비어있습니다. 차트 생성 불가.")
         return None
 
     # Altair를 위한 데이터 변환 (Wide to Long)
@@ -21,17 +21,17 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     )
     
     # --- DEBUG 1: 데이터 변환 직후 ---
-    st.info(f"Chart Debug 1: Wide to Long 변환 후 데이터 행 수: {df_long.shape[0]}")
+    # st.info(f"Chart Debug 1: Wide to Long 변환 후 데이터 행 수: {df_long.shape[0]}")
     
     # Pass 상태와 0인 값 제거
     df_long = df_long[df_long['Status'] != 'Pass'] 
     df_long = df_long[df_long['Count'] > 0]
     
     # --- DEBUG 2: 필터링 (Pass/0 값 제거) 후 ---
-    st.info(f"Chart Debug 2: Pass/0 값 제거 후 최종 데이터 행 수: {df_long.shape[0]}")
+    # st.info(f"Chart Debug 2: Pass/0 값 제거 후 최종 데이터 행 수: {df_long.shape[0]}")
     
     if df_long.empty:
-        st.error("Chart Debug: 필터링 후 남은 데이터가 0건입니다. 차트 생성 불가.")
+        # st.error("Chart Debug: 필터링 후 남은 데이터가 0건입니다. 차트 생성 불가.")
         return None 
 
     # 순서 정의 (Pass 제외)
@@ -41,14 +41,30 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         range=['#FF9800', '#F44336', '#9E9E9E'] 
     )
 
-    # 1. Base 인코딩 정의 (레이어들이 공유할 기본 구조)
+    # # 1. Base 인코딩 정의 (레이어들이 공유할 기본 구조)
+    # base = alt.Chart(df_long).encode(
+    #     x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+    #     y=alt.Y('Count', title='유닛 수'),
+    #     color=alt.Color('Status', scale=color_scale, sort=status_order),
+    #     tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
+    # ).properties(
+    #     title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (누적 막대 차트)'
+    # )
+
+    # 1. Base 인코딩 정의 (Facet 제거)
     base = alt.Chart(df_long).encode(
+        # [핵심 수정]: X축을 Test 항목으로 설정하고, Jig와 Date는 합산됩니다.
         x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
-        y=alt.Y('Count', title='유닛 수'),
+        y=alt.Y('sum(Count)', title='총 불량/제외 건수'), # Y축은 Count의 합산
         color=alt.Color('Status', scale=color_scale, sort=status_order),
+        # tooltip=[
+        #     'Test', 
+        #     'Status', 
+        #     alt.Tooltip('sum(Count)', format=',.0f', title='합산 건수') # 툴팁에 합산 건수 표시
+        # ]
         tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
     ).properties(
-        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (누적 막대 차트)'
+        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산)'
     )
 
     # 2. 막대 (Bar) 레이어 생성
@@ -63,22 +79,32 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     x='independent' # Test 항목별 X축 독립
     # )
     
-    # # 3. 텍스트 (Text) 레이어 생성
-    chart_text = alt.Chart(df_long).encode(
-        # X축을 Test로 설정 (Bar 차트와 동일)
-        x=alt.X('Test', sort=None),
-        y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
-        text=alt.Text('sum(Count)', format=',.0f'),
-        color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
-    ).mark_text(
+    # # # 3. 텍스트 (Text) 레이어 생성
+    # chart_text = alt.Chart(df_long).encode(
+    #     # X축을 Test로 설정 (Bar 차트와 동일)
+    #     x=alt.X('Test', sort=None),
+    #     y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
+    #     text=alt.Text('sum(Count)', format=',.0f'),
+    #     color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
+    # ).mark_text(
+    #     align='center',
+    #     baseline='bottom',
+    #     dy=-5
+    # ).transform_aggregate(
+    #     total_count='sum(Count)',
+    #     # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
+    #     # groupby=['Test', 'Date', 'Jig'] 
+    #     groupby=['Date', 'Jig', 'Test']
+    # )
+
+    # 3. 텍스트 (Text) 레이어 생성 (막대 위에 값 표시)
+    chart_text = base.mark_text(
         align='center',
-        baseline='bottom',
-        dy=-5
-    ).transform_aggregate(
-        total_count='sum(Count)',
-        # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
-        # groupby=['Test', 'Date', 'Jig'] 
-        groupby=['Date', 'Jig', 'Test']
+        baseline='middle', # 텍스트를 막대 중간에 배치
+    ).encode(
+        y=alt.Y('sum(Count)', stack='zero', title=''), 
+        text=alt.Text('sum(Count)', format=',.0f'),
+        color=alt.value('white') 
     )
 
     # # 3. 텍스트 (Text) 레이어 생성
@@ -95,14 +121,14 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # )
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
-    st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
+    # st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
     # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
     layered_chart = alt.layer(
         chart_bar,
         chart_text
-    ).resolve_scale(
-        y='independent'
+    # ).resolve_scale(
+    #     y='independent'
     ).interactive()
     
     # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
@@ -116,20 +142,20 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # 차트와 텍스트 레이어링을 분리하고, 막대 차트에 패싯을 바로 적용합니다.
     # final_chart = chart_bar.interactive() 
 
-    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
-    final_chart = layered_chart.facet(
-        # [핵심 수정]: alt.Column()에 format 인수를 사용하지 않음.
-        #            Facet의 목적은 분할이므로, 인코딩에 Date와 Jig를 모두 포함시킵니다.
-        column=alt.Column(
-            'Test', 
-            header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목')
-        ),
-        row=alt.Row(
-             'Date', 
-             header=alt.Header(title='날짜')
-        )
-        # Jig별로 나누려면 Test 대신 Jig를 Column으로 사용해야 함.
-        # 현재는 Test 기준으로 나눕니다.
-    )
+    # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    # final_chart = layered_chart.facet(
+    #     # [핵심 수정]: alt.Column()에 format 인수를 사용하지 않음.
+    #     #            Facet의 목적은 분할이므로, 인코딩에 Date와 Jig를 모두 포함시킵니다.
+    #     column=alt.Column(
+    #         'Test', 
+    #         header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목')
+    #     ),
+    #     row=alt.Row(
+    #          'Date', 
+    #          header=alt.Header(title='날짜')
+    #     )
+    #     # Jig별로 나누려면 Test 대신 Jig를 Column으로 사용해야 함.
+    #     # 현재는 Test 기준으로 나눕니다.
+    # )
 
     return final_chart
