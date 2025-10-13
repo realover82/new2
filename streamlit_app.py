@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st #Add new feature for user authentication
 import pandas as pd
 from datetime import datetime
 # import altair as alt
@@ -8,6 +8,7 @@ from typing import Dict
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_main import display_analysis_result 
 # from chart_generator import create_stacked_bar_chart 
+from chart_generator import create_simple_bar_chart
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 from csv2 import read_csv_with_dynamic_header, analyze_data
@@ -209,7 +210,7 @@ def main():
         summary_df_temp = generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
         if summary_df_temp is not None:
             summary_df_display = summary_df_temp # 성공적으로 DF가 반환된 경우에만 저장
-            st.session_state['summary_df_for_chart'] = summary_df_temp # 차트용 세션 데이터도 갱신
+            # st.session_state['summary_df_for_chart'] = summary_df_temp # 차트용 세션 데이터도 갱신
         
 
         # try:
@@ -253,27 +254,42 @@ def main():
     #     else:
     #          st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 분석을 실행하거나 필터를 해제해 주세요.")
 
-    # B) 차트 출력 로직 (Altair 제거, st.bar_chart 사용)
-    if st.session_state.show_chart:
-        # 테이블 생성에 성공한 DF를 사용합니다.
-        if summary_df_display is not None and not summary_df_display.empty:
-            st.subheader("QC 결과 막대 그래프 (기본 Streamlit 차트)")
+    # # B) 차트 출력 로직 (Altair 제거, st.bar_chart 사용)
+    # if st.session_state.show_chart:
+    #     # 테이블 생성에 성공한 DF를 사용합니다.
+    #     if summary_df_display is not None and not summary_df_display.empty:
+    #         st.subheader("QC 결과 막대 그래프 (기본 Streamlit 차트)")
             
-            # [핵심 수정]: st.bar_chart를 사용하여 Altair 충돌을 회피합니다.
-            # 'Test'와 'Date'를 인덱스로 설정하여 막대가 분리되도록 준비합니다.
+    #         # [핵심 수정]: st.bar_chart를 사용하여 Altair 충돌을 회피합니다.
+    #         # 'Test'와 'Date'를 인덱스로 설정하여 막대가 분리되도록 준비합니다.
             
-            # 1. 데이터 준비 (불량 건수와 Test 항목만 남김)
-            df_chart_base = summary_df_display.copy()
-            df_chart_base['Test_ID'] = df_chart_base['Date'].astype(str) + " / " + df_chart_base['Jig'].astype(str) + " / " + df_chart_base['Test']
+    #         # 1. 데이터 준비 (불량 건수와 Test 항목만 남김)
+    #         df_chart_base = summary_df_display.copy()
+    #         df_chart_base['Test_ID'] = df_chart_base['Date'].astype(str) + " / " + df_chart_base['Jig'].astype(str) + " / " + df_chart_base['Test']
             
-            # 2. X축을 'Test_ID'로, Y축을 불량 항목으로 설정
-            df_chart = df_chart_base.set_index('Test_ID')[['미달 (Under)', '초과 (Over)', 'Failure']]
+    #         # 2. X축을 'Test_ID'로, Y축을 불량 항목으로 설정
+    #         df_chart = df_chart_base.set_index('Test_ID')[['미달 (Under)', '초과 (Over)', 'Failure']]
 
-            # 3. Streamlit의 기본 막대 차트 위젯을 사용하여 출력
-            st.bar_chart(df_chart) 
+    #         # 3. Streamlit의 기본 막대 차트 위젯을 사용하여 출력
+    #         st.bar_chart(df_chart) 
             
+    #     else:
+    #          st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
+
+    # B) 차트 출력 로직 (st.bar_chart 사용)
+    if st.session_state.show_chart:
+        summary_df = st.session_state.get('summary_df_for_chart') 
+        
+        if summary_df is not None and not summary_df.empty:
+            st.subheader("QC 결과 막대 그래프 (Jig별 분리)")
+            try:
+                # [수정] chart_generator의 함수 호출 (jig_separated=True)
+                create_simple_bar_chart(summary_df, 'PCB', jig_separated=True) 
+            except Exception as e:
+                st.error(f"그래프 렌더링 중 오류 발생: {e}")
         else:
              st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
+    
     # [데이터 유효성 검사 및 안내]
     if (st.session_state.show_summary_table or st.session_state.show_chart) and (df_pcb_filtered is None or df_pcb_filtered.empty):
         st.error("결과 생성 실패: PCB 분석 데이터가 없거나 필터링 결과 0건입니다.")
