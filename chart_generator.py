@@ -68,7 +68,10 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         # Test, Date, Jig를 결합한 새로운 축을 만들어야 안정적입니다.
         # x=alt.X('Test:N', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
         x=alt.X('Test:N', axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
-        column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
+        xOffset=alt.XOffset('Test:N', title=None), # Test 항목별로 막대를 나란히 배치
+        
+        # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
+        
         # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
         # x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
         y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
@@ -82,6 +85,9 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     
     ).properties(
         title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산)'
+    # )
+    ).resolve_scale(
+        x='shared'
     )
 
     # 2. 막대 (Bar) 레이어 생성
@@ -139,6 +145,9 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         y=alt.Y('sum(Count)', stack='zero', title=''), 
         text=alt.Text('sum(Count):Q', format=',.0f'), # 개별 Count 값 표시
         color=alt.value('white') # 텍스트 색상 고정
+
+        # [중요]: 텍스트 레이어에도 xOffset을 적용해야 막대와 텍스트가 일치합니다.
+        xOffset=alt.XOffset('Test:N', title=None), 
     )
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
@@ -189,8 +198,8 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         chart_bar, 
         chart_text
     ).resolve_scale(
-    y='independent',
-    x='independent'
+        y='independent',
+        x='independent'
     # # x='shared' # X축을 공유하여 날짜/항목별 분리
     # # )
     ).interactive()
