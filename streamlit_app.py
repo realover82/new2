@@ -298,32 +298,32 @@ def main():
             st.subheader("QC 결과 분할 차트")
             
             # 메인 화면을 3개의 컬럼으로 분할
-            chart_col1, chart_col2, chart_col3 = st.columns(3)
+            # chart_col1, chart_col2, chart_col3 = st.columns(3)
 
-            # 1. 상세 분리 차트 (Date/Jig/Test)
-            with chart_col1:
-                # st.info("차트 1: 상세 분리 (날짜/Jig/Test)")
-                create_simple_bar_chart(summary_df, "상세 분리", 'Date_Jig_Test')
+        # 1. 상세 분리 차트 (Date/Jig/Test)
+        # with chart_col1:
+            # st.info("차트 1: 상세 분리 (날짜/Jig/Test)")
+            create_simple_bar_chart(summary_df, "상세 분리", 'Date_Jig_Test')
 
-                st.markdown("---") # 세로 구분을 위한 구분선
+            st.markdown("---") # 세로 구분을 위한 구분선
 
-            # 2. 날짜별 합산 차트
-            with chart_col2:
-                # st.info("차트 2: 날짜별 합산")
-                create_simple_bar_chart(summary_df, "날짜별 합산", 'Date')
-                st.markdown("---") # 세로 구분을 위한 구분선
+        # 2. 날짜별 합산 차트
+        # with chart_col2:
+            # st.info("차트 2: 날짜별 합산")
+            create_simple_bar_chart(summary_df, "날짜별 합산", 'Date')
+            st.markdown("---") # 세로 구분을 위한 구분선
 
-            # 3. Test 항목별 합산 차트
-            with chart_col3:
-                # st.info("차트 3: 테스트 항목별 합산")
-                create_simple_bar_chart(summary_df, "테스트 항목별 합산", 'Test')
-                st.markdown("---") # 세로 구분을 위한 구분선
+        # 3. Test 항목별 합산 차트
+        # with chart_col3:
+            # st.info("차트 3: 테스트 항목별 합산")
+            create_simple_bar_chart(summary_df, "테스트 항목별 합산", 'Test')
+            st.markdown("---") # 세로 구분을 위한 구분선
 
-            # 4. jig 항목별 합산 차트
-            with chart_col3:
-                # st.info("차트 4: jig별 합산")
-                create_simple_bar_chart(summary_df, "jig별 합산", 'Jig')
-                # st.markdown("---") # 세로 구분을 위한 구분선    
+        # 4. jig 항목별 합산 차트
+        # with chart_col4:
+            # st.info("차트 4: jig별 합산")
+            create_simple_bar_chart(summary_df, "jig별 합산", 'Jig')
+            st.markdown("---") # 세로 구분을 위한 구분선    
             
         else:
              st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
