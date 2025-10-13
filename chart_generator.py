@@ -138,6 +138,8 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         baseline='middle', # 텍스트를 막대 중간에 배치
         dy=0
     ).encode(
+        # [핵심 수정]: X축 인코딩을 제거하고 Bar 차트의 X축 인코딩을 상속받게 합니다.
+        x=alt.value(20), # X축은 Bar에 맡기고 임시 고정값 사용 (옵셋 역할)
         y=alt.Y('sum(Count)', stack='zero', title=''), 
         text=alt.Text('sum(Count)', format=',.0f'),
         color=alt.value('white') 
