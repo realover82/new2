@@ -79,15 +79,16 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     df_pivot['Failure'] = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)']
     df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
     final_cols = ['Date', 'Jig', 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)', 'Total', 'Failure', 'Failure Rate (%)']
-    summary_df = df_pivot[final_cols].sort_values(by=['Date', 'Jig', 'Test'])
+    summary_df = df_pivot[final_cols].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
     
-    # 5. Streamlit에 출력 및 차트 데이터 저장
-    st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
-    st.dataframe(summary_df.set_index(['Date', 'Jig', 'Test']))
-    st.markdown("---")
+    # # 5. Streamlit에 출력 및 차트 데이터 저장
+    # st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+    # st.dataframe(summary_df.set_index(['Date', 'Jig', 'Test']))
+    # st.markdown("---")
     
     # 차트 생성을 위해 summary_df를 세션 상태에 저장합니다.
     st.session_state['summary_df_for_chart'] = summary_df
+    return summary_df # DataFrame 반환
 
 
 # ==============================
