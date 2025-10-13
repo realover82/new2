@@ -51,54 +51,65 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (누적 막대 차트)'
     # )
 
-    # 1. Base 인코딩 정의 (Facet 제거)
-    base = alt.Chart(df_long).encode(
-        # [핵심 수정]: X축을 Test 항목으로 설정하고, Jig와 Date는 합산됩니다.
-        # x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
-        # y=alt.Y('sum(Count)', title='총 불량/제외 건수'), # Y축은 Count의 합산
-        # color=alt.Color('Status', scale=color_scale, sort=status_order),
-        # tooltip=[
-        #     'Test', 
-        #     'Status', 
-        #     alt.Tooltip('sum(Count)', format=',.0f', title='합산 건수') # 툴팁에 합산 건수 표시
-        # ]
-        # tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
-
-        # [핵심 수정]: X축을 명목형(:N)으로, Y축을 정량형(:Q)으로 명시합니다.
-        # Test, Date, Jig를 결합한 새로운 축을 만들어야 안정적입니다.
-        # x=alt.X('Test:N', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
-        # x=alt.X('Test:N', axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
-        # xOffset=alt.XOffset('Test:N', title=None), # Test 항목별로 막대를 나란히 배치
-        
-        # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
-        
-        # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
-        x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
-        y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
-        # y=alt.Y('sum(Count):Q', title='총 건수'), # Y축은 Count의 합산
-        color=alt.Color('Status:N', scale=color_scale, sort=status_order),
-        # Column 인코딩: X축 내에서 막대를 Test 항목별로 분리
-        # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
-        # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
-        
-        tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
-    
-    ).properties(
-        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산)'
-    # )
-    ).resolve_scale(
-        x='shared'
+    # 1. Base Chart 정의: 데이터와 기본 속성만 포함
+    base = alt.Chart(df_long).properties(
+        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (일별 분할)'
     )
 
+    # # 1. Base 인코딩 정의 (Facet 제거)
+    # base = alt.Chart(df_long).encode(
+    #     # [핵심 수정]: X축을 Test 항목으로 설정하고, Jig와 Date는 합산됩니다.
+    #     # x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+    #     # y=alt.Y('sum(Count)', title='총 불량/제외 건수'), # Y축은 Count의 합산
+    #     # color=alt.Color('Status', scale=color_scale, sort=status_order),
+    #     # tooltip=[
+    #     #     'Test', 
+    #     #     'Status', 
+    #     #     alt.Tooltip('sum(Count)', format=',.0f', title='합산 건수') # 툴팁에 합산 건수 표시
+    #     # ]
+    #     # tooltip=['Date', 'Jig', 'Test', 'Status', 'Count']
+
+    #     # [핵심 수정]: X축을 명목형(:N)으로, Y축을 정량형(:Q)으로 명시합니다.
+    #     # Test, Date, Jig를 결합한 새로운 축을 만들어야 안정적입니다.
+    #     # x=alt.X('Test:N', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+    #     # x=alt.X('Test:N', axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+    #     # xOffset=alt.XOffset('Test:N', title=None), # Test 항목별로 막대를 나란히 배치
+        
+    #     # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
+        
+    #     # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
+    #     x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
+    #     y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
+    #     # y=alt.Y('sum(Count):Q', title='총 건수'), # Y축은 Count의 합산
+    #     color=alt.Color('Status:N', scale=color_scale, sort=status_order),
+    #     # Column 인코딩: X축 내에서 막대를 Test 항목별로 분리
+    #     # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
+    #     # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
+        
+    #     tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
+    
+    # ).properties(
+    #     title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산)'
+    # # )
+    # ).resolve_scale(
+    #     x='shared'
+    # )
+
     # 2. 막대 (Bar) 레이어 생성
-    chart_bar = base.mark_bar()
+    # chart_bar = base.mark_bar()
     # .interactive()
     # [수정]: Date와 Jig를 구분하는 그룹 인코딩을 X축에 추가합니다.
-    # chart_bar = base.mark_bar().encode(
-    #     # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
-    #     x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
-    #     column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
-    #     # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
+    chart_bar = base.mark_bar().encode(
+        # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
+        # x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
+        x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
+        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=10),
+        y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'),
+        color=alt.Color('Status:N', scale=color_scale, sort=status_order),
+        tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
+    )
+        # column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
+        # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
     # ).resolve_scale(
     #     x='independent' # Test 항목별 X축 독립
     # )
@@ -130,6 +141,20 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     text=alt.Text('sum(Count)', format=',.0f'),
     #     color=alt.value('white') 
     # )
+
+    # 3. 텍스트 레이어 생성
+    chart_text = base.mark_text(
+        align='center',
+        baseline='middle',
+        dy=0
+    ).encode(
+        # Bar 차트와 동일한 X/Column 인코딩 사용
+        x=alt.X('Date:T'), 
+        column=alt.Column('Test:N', title=''), 
+        y=alt.Y('sum(Count)', stack='zero', title=''),
+        text=alt.Text('sum(Count)', format=',.0f'),
+        color=alt.value('white')
+    )
 
     # 3. 텍스트 (Text) 레이어 생성
     # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
@@ -194,23 +219,23 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # final_chart = chart_bar 
 
     # 3. 최종 차트: 막대 차트에 Test 항목별로 Facet 적용
-    final_chart = chart_bar.facet(
-        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
-    ).resolve_scale(
-        y='independent',
-        x='shared'
-    ).interactive()
-
-    # # 4. 최종 레이어링
-    # final_chart = alt.layer(
-    #     chart_bar, 
-    #     chart_text
+    # final_chart = chart_bar.facet(
+    #     column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
     # ).resolve_scale(
     #     y='independent',
-    #     x='independent'
-    # # # x='shared' # X축을 공유하여 날짜/항목별 분리
-    # # # )
+    #     x='shared'
     # ).interactive()
+
+    # # 4. 최종 레이어링
+    final_chart = alt.layer(
+        chart_bar, 
+        chart_text
+    ).resolve_scale(
+        y='independent',
+        x='independent'
+    # # x='shared' # X축을 공유하여 날짜/항목별 분리
+    # # )
+    ).interactive()
 
     # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
     # final_chart = layered_chart.facet(
