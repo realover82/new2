@@ -73,7 +73,7 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         color=alt.Color('Status:N', scale=color_scale, sort=status_order),
         # Column 인코딩: X축 내에서 막대를 Test 항목별로 분리
         # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
-        column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
+        # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
         
         tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
     
@@ -142,14 +142,15 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
     # # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    # layered_chart = alt.layer(
-    #     chart_bar,
-    #     chart_text
-    # ).resolve_scale(
-    #     y='independent'
+    layered_chart = alt.layer(
+        chart_bar,
+        chart_text
+    ).resolve_scale(
+        y='independent',
+        x='independent'
     # )
 
-    # ).interactive()
+    ).interactive()
     
     # # 5. 합쳐진 레이어에 Test 항목별 
     
@@ -180,20 +181,24 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # final_chart = chart_bar 
 
     # # 4. 최종 레이어링
-    final_chart = alt.layer(
-        chart_bar, 
-        chart_text
-    ).resolve_scale(
-    y='independent',
-    x='independent'
-    # x='shared' # X축을 공유하여 날짜/항목별 분리
-    # )
-    ).interactive()
-
-    # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
-    # final_chart = layered_chart.facet(
-    #     # Test 항목 (:N)을 열(Column)으로 분할합니다.
-    #     column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+    # final_chart = alt.layer(
+    #     chart_bar, 
+    #     chart_text
+    # ).resolve_scale(
+    # y='independent',
+    # x='independent'
+    # # x='shared' # X축을 공유하여 날짜/항목별 분리
+    # # )
     # ).interactive()
 
+    # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    final_chart = layered_chart.facet(
+        # Test 항목 (:N)을 열(Column)으로 분할합니다.
+        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+        # 2차 분할: Date별로 행(Row) 분할 (선택 사항, 복잡도를 낮추기 위해 일단 제거)
+        # row=alt.Row('Date:T', header=alt.Header(title='날짜'), format=('%m-%d')) 
+    
+    # ).interactive()
+    )
+# Add new feature for user authentication
     return final_chart
