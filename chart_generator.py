@@ -71,27 +71,27 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     # groupby=['Test', 'Date', 'Jig'] 
     #     groupby=['Date', 'Jig', 'Test']
     # )
-    
-    # 3. 텍스트 (Text) 레이어 생성
-    # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
-    chart_text = base.mark_text(
-        align='center',
-        baseline='middle', # 중앙에 배치하여 막대 안쪽으로 들어가도록 수정
-        dy=0
-    ).encode(
-        # Y축을 sum(Count)로 설정하여 막대 안에 텍스트를 배치합니다.
-        y=alt.Y('sum(Count)', stack='zero', title=''), 
-        text=alt.Text('Count', format=',.0f'), # 개별 Count 값 표시
-        color=alt.value('white') # 텍스트 색상 고정
-    )
+
+    # # 3. 텍스트 (Text) 레이어 생성
+    # # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
+    # chart_text = base.mark_text(
+    #     align='center',
+    #     baseline='middle', # 중앙에 배치하여 막대 안쪽으로 들어가도록 수정
+    #     dy=0
+    # ).encode(
+    #     # Y축을 sum(Count)로 설정하여 막대 안에 텍스트를 배치합니다.
+    #     y=alt.Y('sum(Count)', stack='zero', title=''), 
+    #     text=alt.Text('Count', format=',.0f'), # 개별 Count 값 표시
+    #     color=alt.value('white') # 텍스트 색상 고정
+    # )
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
     st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
     # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
     layered_chart = alt.layer(
-        chart_bar, 
-        chart_text
+        chart_bar
+        # chart_text
     ).resolve_scale(
         y='independent'
     ).interactive()
