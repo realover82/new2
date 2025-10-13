@@ -52,34 +52,34 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     )
 
     # 2. 막대 (Bar) 레이어 생성
-    # chart_bar = base.mark_bar()
+    chart_bar = base.mark_bar()
     # [수정]: Date와 Jig를 구분하는 그룹 인코딩을 X축에 추가합니다.
-    chart_bar = base.mark_bar().encode(
-        # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
-        x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
-        column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
-        # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
-    ).resolve_scale(
-        x='independent' # Test 항목별 X축 독립
-    )
+    # chart_bar = base.mark_bar().encode(
+    #     # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
+    #     x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
+    #     column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
+    #     # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
+    # ).resolve_scale(
+    #     x='independent' # Test 항목별 X축 독립
+    # )
     
     # # 3. 텍스트 (Text) 레이어 생성
-    # chart_text = alt.Chart(df_long).encode(
-    #     # X축을 Test로 설정 (Bar 차트와 동일)
-    #     x=alt.X('Test', sort=None),
-    #     y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
-    #     text=alt.Text('sum(Count)', format=',.0f'),
-    #     color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
-    # ).mark_text(
-    #     align='center',
-    #     baseline='bottom',
-    #     dy=-5
-    # ).transform_aggregate(
-    #     total_count='sum(Count)',
-    #     # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
-    #     # groupby=['Test', 'Date', 'Jig'] 
-    #     groupby=['Date', 'Jig', 'Test']
-    # )
+    chart_text = alt.Chart(df_long).encode(
+        # X축을 Test로 설정 (Bar 차트와 동일)
+        x=alt.X('Test', sort=None),
+        y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
+        text=alt.Text('sum(Count)', format=',.0f'),
+        color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
+    ).mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5
+    ).transform_aggregate(
+        total_count='sum(Count)',
+        # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
+        # groupby=['Test', 'Date', 'Jig'] 
+        groupby=['Date', 'Jig', 'Test']
+    )
 
     # # 3. 텍스트 (Text) 레이어 생성
     # # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
@@ -97,23 +97,39 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # --- DEBUG 3: 최종 차트 레이어링 ---
     st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
-    # # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    # layered_chart = alt.layer(
-    #     chart_bar
-    #     # chart_text
-    # ).resolve_scale(
-    #     y='independent'
-    # ).interactive()
+    # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
+    layered_chart = alt.layer(
+        chart_bar,
+        chart_text
+    ).resolve_scale(
+        y='independent'
+    ).interactive()
     
     # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
     # final_chart = layered_chart.facet(
     #     column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
     # )
-    
+
     # 4. 최종 차트 반환 (텍스트 레이어 없이 막대 그래프만 사용)
     # [수정] layered_chart 대신 chart_bar에 직접 Facet을 적용할 수 있도록 로직 단순화
     
     # 차트와 텍스트 레이어링을 분리하고, 막대 차트에 패싯을 바로 적용합니다.
-    final_chart = chart_bar.interactive() 
+    # final_chart = chart_bar.interactive() 
+
+    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    final_chart = layered_chart.facet(
+        # [핵심 수정]: alt.Column()에 format 인수를 사용하지 않음.
+        #            Facet의 목적은 분할이므로, 인코딩에 Date와 Jig를 모두 포함시킵니다.
+        column=alt.Column(
+            'Test', 
+            header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목')
+        ),
+        row=alt.Row(
+             'Date', 
+             header=alt.Header(title='날짜')
+        )
+        # Jig별로 나누려면 Test 대신 Jig를 Column으로 사용해야 함.
+        # 현재는 Test 기준으로 나눕니다.
+    )
 
     return final_chart
