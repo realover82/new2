@@ -79,33 +79,33 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     x='independent' # Test 항목별 X축 독립
     # )
     
-    # # # 3. 텍스트 (Text) 레이어 생성
-    # chart_text = alt.Chart(df_long).encode(
-    #     # X축을 Test로 설정 (Bar 차트와 동일)
-    #     x=alt.X('Test', sort=None),
-    #     y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
-    #     text=alt.Text('sum(Count)', format=',.0f'),
-    #     color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
-    # ).mark_text(
-    #     align='center',
-    #     baseline='bottom',
-    #     dy=-5
-    # ).transform_aggregate(
-    #     total_count='sum(Count)',
-    #     # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
-    #     # groupby=['Test', 'Date', 'Jig'] 
-    #     groupby=['Date', 'Jig', 'Test']
-    # )
-
-    # 3. 텍스트 (Text) 레이어 생성 (막대 위에 값 표시)
-    chart_text = base.mark_text(
-        align='center',
-        baseline='middle', # 텍스트를 막대 중간에 배치
-    ).encode(
-        y=alt.Y('sum(Count)', stack='zero', title=''), 
+    # # 3. 텍스트 (Text) 레이어 생성
+    chart_text = alt.Chart(df_long).encode(
+        # X축을 Test로 설정 (Bar 차트와 동일)
+        x=alt.X('Test', sort=None),
+        y=alt.Y('sum(Count)', stack='zero', title=''), # Y축 제목 제거
         text=alt.Text('sum(Count)', format=',.0f'),
-        color=alt.value('white') 
+        color=alt.value('black') # 텍스트 색상을 직접 지정하여 충돌 방지
+    ).mark_text(
+        align='center',
+        baseline='bottom',
+        dy=-5
+    ).transform_aggregate(
+        total_count='sum(Count)',
+        # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
+        # groupby=['Test', 'Date', 'Jig'] 
+        groupby=['Date', 'Jig', 'Test']
     )
+
+    # # 3. 텍스트 (Text) 레이어 생성 (막대 위에 값 표시)
+    # chart_text = base.mark_text(
+    #     align='center',
+    #     baseline='middle', # 텍스트를 막대 중간에 배치
+    # ).encode(
+    #     y=alt.Y('sum(Count)', stack='zero', title=''), 
+    #     text=alt.Text('sum(Count)', format=',.0f'),
+    #     color=alt.value('white') 
+    # )
 
     # # 3. 텍스트 (Text) 레이어 생성
     # # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
@@ -127,14 +127,14 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     layered_chart = alt.layer(
         chart_bar,
         chart_text
-    # ).resolve_scale(
-    #     y='independent'
+    ).resolve_scale(
+        y='independent'
     ).interactive()
     
-    # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
-    # final_chart = layered_chart.facet(
-    #     column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
-    # )
+    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    final_chart = layered_chart.facet(
+        column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+    )
 
     # 4. 최종 차트 반환 (텍스트 레이어 없이 막대 그래프만 사용)
     # [수정] layered_chart 대신 chart_bar에 직접 Facet을 적용할 수 있도록 로직 단순화
