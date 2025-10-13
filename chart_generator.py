@@ -52,12 +52,12 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # )
 
     # 1. Base Chart 정의: 데이터와 기본 속성만 포함
-    base = alt.Chart(df_long).properties(
-        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (일별 분할)'
-    )
+    # base = alt.Chart(df_long).properties(
+    #     title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (일별 분할)'
+    # )
 
     # # 1. Base 인코딩 정의 (Facet 제거)
-    # base = alt.Chart(df_long).encode(
+    base = alt.Chart(df_long).encode(
     #     # [핵심 수정]: X축을 Test 항목으로 설정하고, Jig와 Date는 합산됩니다.
     #     # x=alt.X('Test', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
     #     # y=alt.Y('sum(Count)', title='총 불량/제외 건수'), # Y축은 Count의 합산
@@ -78,36 +78,36 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     #     # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
         
     #     # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
-    #     x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
-    #     y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
+        x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
+        y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
     #     # y=alt.Y('sum(Count):Q', title='총 건수'), # Y축은 Count의 합산
-    #     color=alt.Color('Status:N', scale=color_scale, sort=status_order),
+        color=alt.Color('Status:N', scale=color_scale, sort=status_order),
     #     # Column 인코딩: X축 내에서 막대를 Test 항목별로 분리
     #     # column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=5),
     #     # column=alt.Column('Date:T', header=alt.Header(titleOrient="bottom", labelOrient="top", title='날짜'), format=('%m-%d')),
         
-    #     tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
+        tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
     
-    # ).properties(
-    #     title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산)'
+    ).properties(
+        title=f'{key_prefix} 테스트 항목별 불량/제외 결과 (기간/Jig 합산) (일별분할)'
     # # )
     # ).resolve_scale(
     #     x='shared'
-    # )
+    )
 
     # 2. 막대 (Bar) 레이어 생성
-    # chart_bar = base.mark_bar()
+    chart_bar = base.mark_bar()
     # .interactive()
     # [수정]: Date와 Jig를 구분하는 그룹 인코딩을 X축에 추가합니다.
-    chart_bar = base.mark_bar().encode(
-        # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
-        # x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
-        x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
-        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=10),
-        y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'),
-        color=alt.Color('Status:N', scale=color_scale, sort=status_order),
-        tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
-    )
+    # chart_bar = base.mark_bar().encode(
+    #     # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
+    #     # x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
+    #     x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
+    #     column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'), spacing=10),
+    #     y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'),
+    #     color=alt.Color('Status:N', scale=color_scale, sort=status_order),
+    #     tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
+    # )
         # column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
         # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
     # ).resolve_scale(
@@ -133,28 +133,29 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # )
 
     # # 3. 텍스트 (Text) 레이어 생성 (막대 위에 값 표시)
-    # chart_text = base.mark_text(
-    #     align='center',
-    #     baseline='middle', # 텍스트를 막대 중간에 배치
-    # ).encode(
-    #     y=alt.Y('sum(Count)', stack='zero', title=''), 
-    #     text=alt.Text('sum(Count)', format=',.0f'),
-    #     color=alt.value('white') 
-    # )
-
-    # 3. 텍스트 레이어 생성
     chart_text = base.mark_text(
         align='center',
-        baseline='middle',
+        baseline='middle', # 텍스트를 막대 중간에 배치
         dy=0
     ).encode(
-        # Bar 차트와 동일한 X/Column 인코딩 사용
-        x=alt.X('Date:T'), 
-        column=alt.Column('Test:N', title=''), 
-        y=alt.Y('sum(Count)', stack='zero', title=''),
+        y=alt.Y('sum(Count)', stack='zero', title=''), 
         text=alt.Text('sum(Count)', format=',.0f'),
-        color=alt.value('white')
+        color=alt.value('white') 
     )
+
+    # 3. 텍스트 레이어 생성
+    # chart_text = base.mark_text(
+    #     align='center',
+    #     baseline='middle',
+    #     dy=0
+    # ).encode(
+    #     # Bar 차트와 동일한 X/Column 인코딩 사용
+    #     x=alt.X('Date:T'), 
+    #     column=alt.Column('Test:N', title=''), 
+    #     y=alt.Y('sum(Count)', stack='zero', title=''),
+    #     text=alt.Text('sum(Count)', format=',.0f'),
+    #     color=alt.value('white')
+    # )
 
     # 3. 텍스트 (Text) 레이어 생성
     # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
@@ -179,16 +180,16 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
     # # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    # layered_chart = alt.layer(
-    #     chart_bar,
-    #     chart_text
-    # ).resolve_scale(
-    #     y='independent',
-    #     x='shared'
+    layered_chart = alt.layer(
+        chart_bar,
+        chart_text
+    ).resolve_scale(
+        y='independent',
+        x='shared'
     #     # x='independent'
     # # )
 
-    # ).interactive()
+    ).interactive()
     
     # # 5. 합쳐진 레이어에 Test 항목별 
     
@@ -227,24 +228,24 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # ).interactive()
 
     # # 4. 최종 레이어링
-    final_chart = alt.layer(
-        chart_bar, 
-        chart_text
-    ).resolve_scale(
-        y='independent',
-        x='independent'
-    # # x='shared' # X축을 공유하여 날짜/항목별 분리
-    # # )
-    ).interactive()
+    # final_chart = alt.layer(
+    #     chart_bar, 
+    #     chart_text
+    # ).resolve_scale(
+    #     y='independent',
+    #     x='independent'
+    # # # x='shared' # X축을 공유하여 날짜/항목별 분리
+    # # # )
+    # ).interactive()
 
     # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
-    # final_chart = layered_chart.facet(
-    #     # Test 항목 (:N)을 열(Column)으로 분할합니다.
-    #     column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
-    #     # 2차 분할: Date별로 행(Row) 분할 (선택 사항, 복잡도를 낮추기 위해 일단 제거)
-    #     # row=alt.Row('Date:T', header=alt.Header(title='날짜'), format=('%m-%d')) 
+    final_chart = layered_chart.facet(
+        # Test 항목 (:N)을 열(Column)으로 분할합니다.
+        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+        # 2차 분할: Date별로 행(Row) 분할 (선택 사항, 복잡도를 낮추기 위해 일단 제거)
+        # row=alt.Row('Date:T', header=alt.Header(title='날짜'), format=('%m-%d')) 
     
-    # # ).interactive()
-    # )
+    # ).interactive()
+    )
 # Add new feature for user authentication
     return final_chart
