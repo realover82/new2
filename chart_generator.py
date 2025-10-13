@@ -52,7 +52,16 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     )
 
     # 2. 막대 (Bar) 레이어 생성
-    chart_bar = base.mark_bar()
+    # chart_bar = base.mark_bar()
+    # [수정]: Date와 Jig를 구분하는 그룹 인코딩을 X축에 추가합니다.
+    chart_bar = base.mark_bar().encode(
+        # Test 항목 내에서 Date와 Jig를 그룹으로 묶어 막대를 분리합니다.
+        x=alt.X('Test:N', axis=alt.Axis(title='Test 항목')),
+        column=alt.Column('Date', header=alt.Header(title='날짜'), format='%m-%d'), # 날짜별로 컬럼 분리
+        # color=alt.Color('Jig:N', scale=alt.Scale(range=['#36A2EB', '#FF6384'])) # Jig별 색상 추가 가능
+    ).resolve_scale(
+        x='independent' # Test 항목별 X축 독립
+    )
     
     # # 3. 텍스트 (Text) 레이어 생성
     # chart_text = alt.Chart(df_long).encode(
@@ -88,17 +97,23 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # --- DEBUG 3: 최종 차트 레이어링 ---
     st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
-    # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    layered_chart = alt.layer(
-        chart_bar
-        # chart_text
-    ).resolve_scale(
-        y='independent'
-    ).interactive()
+    # # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
+    # layered_chart = alt.layer(
+    #     chart_bar
+    #     # chart_text
+    # ).resolve_scale(
+    #     y='independent'
+    # ).interactive()
     
-    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
-    final_chart = layered_chart.facet(
-        column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
-    )
+    # # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    # final_chart = layered_chart.facet(
+    #     column=alt.Column('Test', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
+    # )
+    
+    # 4. 최종 차트 반환 (텍스트 레이어 없이 막대 그래프만 사용)
+    # [수정] layered_chart 대신 chart_bar에 직접 Facet을 적용할 수 있도록 로직 단순화
+    
+    # 차트와 텍스트 레이어링을 분리하고, 막대 차트에 패싯을 바로 적용합니다.
+    final_chart = chart_bar.interactive() 
 
     return final_chart
