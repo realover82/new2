@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import altair as alt
+# import altair as alt
 from typing import Dict 
 
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
 from analysis_main import display_analysis_result 
-from chart_generator import create_stacked_bar_chart 
+# from chart_generator import create_stacked_bar_chart 
 
 # 2. 각 CSV 분석 모듈 임포트 (기존 코드 유지)
 from csv2 import read_csv_with_dynamic_header, analyze_data
@@ -61,7 +61,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     except Exception:
         st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류.")
         st.session_state['summary_df_for_chart'] = None
-        return
+        return None
         
     df['Jig'] = df[JIG_COL]
     df_melted = df.melt(id_vars=['Date', 'Jig'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
@@ -200,56 +200,98 @@ def main():
     df_pcb_filtered = st.session_state.get('filtered_df_Pcb')
     selected_fields_for_table = st.session_state.get(f'detail_fields_select_Pcb', [])
     
+    summary_df_display = None
+
     # [수정] 차트 로드 직전, 테이블 함수를 강제 호출하여 summary_df_for_chart를 최신화
     if df_pcb_filtered is not None and not df_pcb_filtered.empty:
         # 테이블 보기 상태가 아니어도 차트 생성을 위해 데이터는 미리 생성합니다.
         # 이 부분이 summary_df_for_chart를 최신 데이터로 업데이트합니다.
-        try:
-             generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
-        except Exception as e:
-             st.error(f"테이블 데이터 생성 중 치명적인 오류 발생: {e}")
-
-    # A) 테이블 출력 로직
-    if st.session_state.show_summary_table:
-        # 이미 위에서 데이터가 생성되었으므로, 세션에서 최종 DF를 가져와 표시합니다.
-        summary_df_display = st.session_state.get('summary_df_for_chart')
-        if summary_df_display is not None and not summary_df_display.empty:
-            st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
-            st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
-            st.markdown("---")
-        else:
-            st.error("테이블 생성 실패: 필터링된 PCB 데이터가 없거나 필터링 결과 0건입니다.")
-            st.session_state.show_summary_table = False 
-            
-    # B) 차트 출력 로직 (테이블 아래에 생성)
-    if st.session_state.show_chart:
-        summary_df = st.session_state.get('summary_df_for_chart') 
+        summary_df_temp = generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
+        if summary_df_temp is not None:
+            summary_df_display = summary_df_temp # 성공적으로 DF가 반환된 경우에만 저장
+            st.session_state['summary_df_for_chart'] = summary_df_temp # 차트용 세션 데이터도 갱신
         
-        # [수정] 디버깅 메시지 추가
-        if summary_df is not None and not summary_df.empty:
-            st.subheader("QC 결과 누적 막대 그래프")
-            try:
-                chart_figure = create_stacked_bar_chart(summary_df, 'PCB')
-                if chart_figure:
-                    st.altair_chart(chart_figure, use_container_width=True)
-                else:
-                    st.error("그래프 생성 중 오류가 발생했습니다. (차트 함수가 None 반환)")
-            except Exception as e:
-                st.error(f"그래프 렌더링 중 오류 발생: {e}")
+
+        # try:
+        #      generate_dynamic_summary_table(df_pcb_filtered, selected_fields_for_table, TAB_PROPS_MAP['Pcb'])
+        # except Exception as e:
+        #      st.error(f"테이블 데이터 생성 중 치명적인 오류 발생: {e}")
+    # A) 테이블 출력 로직
+    if st.session_state.show_summary_table and summary_df_display is not None:
+        st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+        # 인덱스를 설정하고 출력합니다.
+        st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
+        st.markdown("---")    
+
+    # # A) 테이블 출력 로직
+    # if st.session_state.show_summary_table:
+    #     # 이미 위에서 데이터가 생성되었으므로, 세션에서 최종 DF를 가져와 표시합니다.
+    #     summary_df_display = st.session_state.get('summary_df_for_chart')
+    #     if summary_df_display is not None and not summary_df_display.empty:
+    #         st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+    #         st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
+    #         st.markdown("---")
+    #     else:
+    #         st.error("테이블 생성 실패: 필터링된 PCB 데이터가 없거나 필터링 결과 0건입니다.")
+    #         st.session_state.show_summary_table = False 
+            
+    # # B) 차트 출력 로직 (테이블 아래에 생성)
+    # if st.session_state.show_chart:
+    #     summary_df = st.session_state.get('summary_df_for_chart') 
+        
+    #     # [수정] 디버깅 메시지 추가
+    #     if summary_df is not None and not summary_df.empty:
+    #         st.subheader("QC 결과 누적 막대 그래프")
+    #         try:
+    #             chart_figure = create_stacked_bar_chart(summary_df, 'PCB')
+    #             if chart_figure:
+    #                 st.altair_chart(chart_figure, use_container_width=True)
+    #             else:
+    #                 st.error("그래프 생성 중 오류가 발생했습니다. (차트 함수가 None 반환)")
+    #         except Exception as e:
+    #             st.error(f"그래프 렌더링 중 오류 발생: {e}")
+    #     else:
+    #          st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 분석을 실행하거나 필터를 해제해 주세요.")
+
+    # B) 차트 출력 로직 (Altair 제거, st.bar_chart 사용)
+    if st.session_state.show_chart:
+        # 테이블 생성에 성공한 DF를 사용합니다.
+        if summary_df_display is not None and not summary_df_display.empty:
+            st.subheader("QC 결과 막대 그래프 (기본 Streamlit 차트)")
+            
+            # [핵심 수정]: st.bar_chart를 사용하여 Altair 충돌을 회피합니다.
+            # 'Test'와 'Date'를 인덱스로 설정하여 막대가 분리되도록 준비합니다.
+            
+            # 1. 데이터 준비 (불량 건수와 Test 항목만 남김)
+            df_chart_base = summary_df_display.copy()
+            df_chart_base['Test_ID'] = df_chart_base['Date'].astype(str) + " / " + df_chart_base['Jig'].astype(str) + " / " + df_chart_base['Test']
+            
+            # 2. X축을 'Test_ID'로, Y축을 불량 항목으로 설정
+            df_chart = df_chart_base.set_index('Test_ID')[['미달 (Under)', '초과 (Over)', 'Failure']]
+
+            # 3. Streamlit의 기본 막대 차트 위젯을 사용하여 출력
+            st.bar_chart(df_chart) 
+            
         else:
-             st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 분석을 실행하거나 필터를 해제해 주세요.")
-    
-    # [차트/테이블 출력 끝]
-    if st.session_state.show_summary_table or st.session_state.show_chart:
-        pass # 정상 표시
-    elif df_pcb_filtered is not None and not df_pcb_filtered.empty:
-        pass # 데이터는 있으나 숨김
-    else:
-        # 데이터가 없는데 표시 시도 중이면 오류 초기화
-        st.warning("분석 실행 후, 'PCB 요약 테이블 보기' 버튼을 눌러 결과를 확인하세요.")
-
-
+             st.warning("차트를 생성할 요약 데이터가 없습니다. 먼저 테이블을 확인하거나 필터를 해제해 주세요.")
+    # [데이터 유효성 검사 및 안내]
+    if (st.session_state.show_summary_table or st.session_state.show_chart) and (df_pcb_filtered is None or df_pcb_filtered.empty):
+        st.error("결과 생성 실패: PCB 분석 데이터가 없거나 필터링 결과 0건입니다.")
+        set_hide_all()
+            
     st.markdown("---") 
+
+    # # [차트/테이블 출력 끝]
+    # if st.session_state.show_summary_table or st.session_state.show_chart:
+    #     pass # 정상 표시
+    # elif df_pcb_filtered is not None and not df_pcb_filtered.empty:
+    #     pass # 데이터는 있으나 숨김
+    # else:
+    #     # 데이터가 없는데 표시 시도 중이면 오류 초기화
+    #     st.warning("분석 실행 후, 'PCB 요약 테이블 보기' 버튼을 눌러 결과를 확인하세요.")
+
+
+    # st.markdown("---") 
     
     # --- 2. 하단 영역 (분석 실행 및 상세 내역) ---
     key = selected_key
