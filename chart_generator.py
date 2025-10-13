@@ -66,7 +66,8 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
 
         # [핵심 수정]: X축을 명목형(:N)으로, Y축을 정량형(:Q)으로 명시합니다.
         # Test, Date, Jig를 결합한 새로운 축을 만들어야 안정적입니다.
-        x=alt.X('Test:N', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+        # x=alt.X('Test:N', sort=None, axis=alt.Axis(title='테스트 항목', labelAngle=-45)),
+        x=alt.X('Date:T', axis=alt.Axis(title='날짜', format='%m-%d')),
         y=alt.Y('sum(Count):Q', title='총 불량/제외 건수'), # Y축은 Count의 합산
         color=alt.Color('Status:N', scale=color_scale, sort=status_order),
         tooltip=['Date:T', 'Jig:N', 'Test:N', 'Status:N', alt.Tooltip('sum(Count):Q', format=',.0f', title='합산 건수')]
@@ -118,15 +119,16 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
 
     # 3. 텍스트 (Text) 레이어 생성
     # [핵심 수정]: transform_aggregate 로직을 제거하고, Base 차트와 동일한 그룹화 인코딩을 사용합니다.
-    chart_text = base.mark_text(
+    # chart_text = base.mark_text(
+    chart_text = chart_bar.mark_text(
         align='center',
         baseline='middle', # 중앙에 배치하여 막대 안쪽으로 들어가도록 수정
-        dy=0,
-        color='white'
+        # dy=0,
+        # color='white'
     ).encode(
         # Y축을 sum(Count)로 설정하여 막대 안에 텍스트를 배치합니다.
-        y=alt.Y('sum(Count)', stack='zero', title=''), 
-        text=alt.Text('sum(Count)', format=',.0f'), # 개별 Count 값 표시
+        # y=alt.Y('sum(Count)', stack='zero', title=''), 
+        text=alt.Text('sum(Count):Q', format=',.0f'), # 개별 Count 값 표시
         color=alt.value('white') # 텍스트 색상 고정
     )
 
@@ -134,11 +136,12 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     # st.success("Chart Debug 3: 최종 레이어링 및 패싯 적용 시작.")
     
     # # 4. 최종 레이어링 (차트와 텍스트를 합치고 축 설정)
-    # layered_chart = alt.layer(
-    #     chart_bar,
-    #     chart_text
-    # ).resolve_scale(
-    #     y='independent'
+    layered_chart = alt.layer(
+        chart_bar,
+        chart_text
+    ).resolve_scale(
+        y='independent'
+    )
     # ).interactive()
     
     # # 5. 합쳐진 레이어에 Test 항목별 
@@ -169,10 +172,19 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
      # [수정]: final_chart는 이제 단순 막대 그래프입니다.
     # final_chart = chart_bar 
 
-    # 4. 최종 레이어링
-    final_chart = alt.layer(
-        chart_bar, 
-        chart_text
+    # # 4. 최종 레이어링
+    # final_chart = alt.layer(
+    #     chart_bar, 
+    #     chart_text
+    # # ).resolve_scale(
+    # # y='independent'
+    # # )
+    # ).interactive()
+    
+    # 5. 합쳐진 레이어에 Test 항목별 패싯(분할) 적용
+    final_chart = layered_chart.facet(
+        # Test 항목 (:N)을 열(Column)으로 분할합니다.
+        column=alt.Column('Test:N', header=alt.Header(titleOrient="bottom", labelOrient="top", title='테스트 항목'))
     ).interactive()
 
     return final_chart
