@@ -183,7 +183,7 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
         chart_bar, 
         chart_text
     ).resolve_scale(
-    y='independent'
+    y='independent',
     x='shared' # X축을 공유하여 날짜/항목별 분리
     # )
     ).interactive()
