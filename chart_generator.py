@@ -4,7 +4,9 @@ from typing import Optional
 import streamlit as st 
 
 # def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optional[alt.Chart]:
-def create_simple_bar_chart(df: pd.DataFrame, key_prefix: str, jig_separated: bool):
+# def create_simple_bar_chart(df: pd.DataFrame, key_prefix: str, jig_separated: bool):
+def create_simple_bar_chart(df: pd.DataFrame, title_suffix: str, group_by_col: str):
+    # ...
         
     """
     QC 요약 테이블 DataFrame을 사용하여 Altair 누적 막대 그래프를 생성하고 차트 객체를 반환합니다.
