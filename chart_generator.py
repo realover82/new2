@@ -68,7 +68,8 @@ def create_stacked_bar_chart(summary_df: pd.DataFrame, key_prefix: str) -> Optio
     ).transform_aggregate(
         total_count='sum(Count)',
         # [핵심 수정]: 텍스트 합산 시 Date와 Jig도 그룹핑하여 막대 차트의 그룹 구조를 유지합니다.
-        groupby=['Test', 'Date', 'Jig'] 
+        # groupby=['Test', 'Date', 'Jig'] 
+        groupby=['Date', 'Jig', 'Test']
     )
 
     # --- DEBUG 3: 최종 차트 레이어링 ---
