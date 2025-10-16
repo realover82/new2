@@ -177,9 +177,9 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
 
     try:
         df_temp = df.copy()
-        df_temp['Date'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
+        df_temp['Date'] = pd.to_datetime(df_temp[TIMESTAMP_COL], errors='coerce').dt.date
     except Exception:
-        st.error(f"날짜 컬럼 변환 오류. {timestamp_col}")
+        st.error(f"날짜 컬럼 변환 오류. {TIMESTAMP_COL}")
         st.session_state['summary_df_for_chart'] = None
         return None
     
