@@ -12,10 +12,20 @@ def create_simple_bar_chart(df: pd.DataFrame, title_suffix: str, group_by_col: s
     if df.empty:
         st.error("차트 생성 실패: 입력 데이터가 비어 있습니다.")
         return
+    
+    # 1. 차트 데이터 준비: 불량 항목만 포함하여 복사
+    # [핵심 수정]: '미달 (Under)' 컬럼이 없으므로, 세부 컬럼을 합산하여 새 컬럼을 만듭니다.
+    
+    # 1-A. 필요한 세부 컬럼이 존재하는지 확인하고, 없다면 0으로 채웁니다.
+    required_parts = ['가성불량_미달', '진성불량_미달', '가성불량_초과', '진성불량_초과', '가성불량_제외', '진성불량_제외', 'Failure']
+    for col in required_parts:
+        if col not in df.columns:
+            df[col] = 0
 
     # 1. 차트 데이터 준비: 불량 항목만 포함하여 복사
     # df_chart_base = df[['미달 (Under)', '초과 (Over)', 'Failure']].copy()
     df_chart_base = df.copy()
+    # df_chart_base = df[['미달 (Under)', '초과 (Over)', 'Failure']].copy()
 
     # 가성불량의 세부 원인 (미달/초과/제외)을 합쳐서 새로운 컬럼으로 만듭니다.
     df_chart_base['Total_미달'] = df_chart_base['가성불량_미달'] + df_chart_base['진성불량_미달']
