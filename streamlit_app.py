@@ -404,7 +404,8 @@ def main():
     # A) 테이블 출력 로직
     if st.session_state.show_summary_table and summary_df_display is not None:
         st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
-        st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
+        # st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
+        st.dataframe(summary_df_display.set_index(['Date', 'Jig'])) # <-- [핵심 수정]: 'Test' 컬럼 제거
         st.markdown("---")
             
     # # B) 차트 출력 로직 (st.bar_chart 사용)
