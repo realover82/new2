@@ -58,29 +58,34 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # # 2. 필수 컬럼 및 상태 맵핑 (로직 유지)
     # qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
     
-    # if not qc_columns:
-    #     st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
-    #     st.session_state['summary_df_for_chart'] = None
-    #     return None
-
-    # 1. QC 컬럼 식별
-    # [핵심 수정]: df_raw 대신 df를 사용합니다.
-    qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
-    
     if not qc_columns:
-        # 선택된 QC 컬럼이 없지만, DF에 QC 컬럼이 존재하면 모두 포함
-        qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
-    
-    if not qc_columns:
-        st.error("테이블 생성 불가: 데이터에 _QC 컬럼이 존재하지 않습니다.")
+        st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
         st.session_state['summary_df_for_chart'] = None
         return None
 
-    # 2. 상태 매핑 및 데이터프레임 준비 (생략)
-    status_map = {
-        'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
-        '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
-    }
+    analysis_key = 'Pcb'
+    summary_data = st.session_state.analysis_data[analysis_key][0]
+    
+
+
+    # # 1. QC 컬럼 식별
+    # # [핵심 수정]: df_raw 대신 df를 사용합니다.
+    # qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
+    
+    # if not qc_columns:
+    #     # 선택된 QC 컬럼이 없지만, DF에 QC 컬럼이 존재하면 모두 포함
+    #     qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
+    
+    # if not qc_columns:
+    #     st.error("테이블 생성 불가: 데이터에 _QC 컬럼이 존재하지 않습니다.")
+    #     st.session_state['summary_df_for_chart'] = None
+    #     return None
+
+    # # 2. 상태 매핑 및 데이터프레임 준비 (생략)
+    # status_map = {
+    #     'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
+    #     '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
+    # }
     
 
     JIG_COL = props.get('jig_col')
@@ -95,15 +100,15 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         st.session_state['summary_df_for_chart'] = None
         return None
         
-    # df_temp['Jig'] = df_temp[JIG_COL] # 이미 analysis_utils에서 생성됨
-    # df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
-    
-    # [수정] row 객체의 속성에 접근할 수 있도록 .itertuples(index=False) 사용 가정
-    analysis_key = 'Pcb'
-    summary_data = st.session_state.analysis_data[analysis_key][0]
-    
-    df_temp['Jig'] = df_temp[JIG_COL]
+    df_temp['Jig'] = df_temp[JIG_COL] # 이미 analysis_utils에서 생성됨
     df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
+    
+    # # [수정] row 객체의 속성에 접근할 수 있도록 .itertuples(index=False) 사용 가정
+    # analysis_key = 'Pcb'
+    # summary_data = st.session_state.analysis_data[analysis_key][0]
+    
+    # df_temp['Jig'] = df_temp[JIG_COL]
+    # df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
 
     # 4. Summary Data를 기반으로 최종 테이블 데이터 재구성
     final_table_data = []
@@ -133,7 +138,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
             row_data = {
                 'Date': current_date,
                 'Jig': current_jig,
-                'Test': test_name, 
+                # 'Test': test_name, 
                 
                 'Pass': day_summary.get('pass', 0),
                 
@@ -163,7 +168,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
 
     summary_df = pd.DataFrame(final_table_data)
     # [추가] Test 항목별로 분리되지 않은 데이터를 위해 Test 컬럼을 삭제합니다.
-    summary_df = summary_df.drop(columns=['Test'], errors='ignore')
+    # summary_df = summary_df.drop(columns=['Test'], errors='ignore')
     
     # 최종 컬럼 순서 재정의 
     final_cols = [
