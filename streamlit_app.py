@@ -145,14 +145,23 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # df_temp: Date, Jig, Test, Mapped_Status, Count 컬럼을 포함하는 Long-form DataFrame이 필요함.
     # 이 DF를 직접 재구성해야 합니다.
     
+    # 1. QC 컬럼 식별
+    qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
+    
+    if not qc_columns:
+        st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
+        st.session_state['summary_df_for_chart'] = None
+        return None
+
+
     # 1. Raw Data (df_raw)와 Summary Data 추출
     analysis_key = 'Pcb' # 현재 PCB 분석만 다루고 있음
     summary_data = st.session_state.analysis_data[analysis_key][0]
     
     # 2. 필터링된 날짜와 Jig 목록 추출 (analysis_main.py에서 이미 필터링됨)
-    df_raw = st.session_state.analysis_results[analysis_key]
+    # df_raw = st.session_state.analysis_results[analysis_key]
     
-    if df_raw.empty: return None
+    # if df_raw.empty: return None
 
     # 3. 필터링된 Date/Jig 목록을 기반으로 Summary Data를 재구성
     
@@ -160,77 +169,138 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # df_pivot의 인덱스(Date, Jig)는 df_filtered의 값과 일치해야 합니다.
     
     # df_filtered의 Date와 Jig 조합을 추출
-    df_temp = df.copy()
-    timestamp_col = props['timestamp_col']
-    jig_col = props['jig_col']
+    # df_temp = df.copy()
+    # timestamp_col = props['timestamp_col']
+    # jig_col = props['jig_col']
+    JIG_COL = props['jig_col']
+    TIMESTAMP_COL = props['timestamp_col']
 
     try:
+        df_temp = df.copy()
         df_temp['Date'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
     except Exception:
         st.error(f"날짜 컬럼 변환 오류. {timestamp_col}")
+        st.session_state['summary_df_for_chart'] = None
         return None
+    
+    df_temp['Jig'] = df_temp[JIG_COL]
+    
+    # 3. Summary Data를 기반으로 최종 테이블 데이터 재구성
+    # final_table_data = []
         
-    jig_date_test_combinations = df_temp[[jig_col, 'Date']].drop_duplicates()
+    # jig_date_test_combinations = df_temp[[jig_col, 'Date']].drop_duplicates()
 
     # 4. summary_data를 기반으로 최종 테이블 데이터 재구성
     final_table_data = []
     
-    for _, row in jig_date_test_combinations.iterrows():
-        current_jig = row[jig_col]
-        current_date_iso = row['Date'].strftime("%Y-%m-%d")
+    # df_raw에서 추출된 고유한 Date/Jig 조합 사용 (df는 이미 필터링된 상태)
+    jig_date_combinations = df_temp[[JIG_COL, 'Date']].drop_duplicates().itertuples(index=False)
+
+
+    # for _, row in jig_date_test_combinations.iterrows():
+    #     current_jig = row[jig_col]
+    #     current_date_iso = row['Date'].strftime("%Y-%m-%d")
+        
+    #     day_summary = summary_data.get(current_jig, {}).get(current_date_iso, {})
+        
+    #     if day_summary:
+    #         # 이 루프에서 모든 QC 항목을 확인해야 하지만, 여기서는 핵심 요약만 사용합니다.
+            
+    #         # [수정] true/false defect의 세부 카운트를 직접 사용
+    #         row_data = {
+    #             'Date': row['Date'],
+    #             'Jig': current_jig,
+    #             'Pass': day_summary.get('pass', 0),
+                
+    #             # 가성불량 (False Defect)
+    #             '가성불량': day_summary.get('false_defect', 0),
+    #             '가성불량_미달': day_summary.get('false_defect_미달', 0),
+    #             '가성불량_초과': day_summary.get('false_defect_초과', 0),
+    #             '가성불량_제외': day_summary.get('false_defect_제외', 0),
+                
+    #             # 진성불량 (True Defect)
+    #             '진성불량': day_summary.get('true_defect', 0),
+    #             '진성불량_미달': day_summary.get('true_defect_미달', 0),
+    #             '진성불량_초과': day_summary.get('true_defect_초과', 0),
+    #             '진성불량_제외': day_summary.get('true_defect_제외', 0),
+                
+    #             'Failure': day_summary.get('fail', 0),
+    #             'Total': day_summary.get('total_test', 0),
+    #             'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') # pass_rate 대신 fail_rate 필요
+    #         }
+    #         # Test 항목은 이 요약 데이터에 없으므로, 데이터 불일치 발생.
+    #         # (이전 테이블은 QC 컬럼별로 행을 생성했기 때문에 Test 항목이 있었습니다.)
+    #         # Test 항목별로 분리하기 위해, day_summary의 세부 데이터를 재분석해야 합니다.
+            
+    #         # 이 방법은 너무 복잡하므로, 단일 Test 항목만 가정하고 진행하거나,
+    #         # 테이블의 필터링 범위를 유지하고, Test 항목은 DF에 있는 Test 항목 목록을 사용합니다.
+            
+    #         # [재시도]: summary_data의 세부 data_list를 재분석하여 Test 항목별로 행을 만듭니다.
+            
+    #         for test_col_name in [col for col in df_raw.columns if col.endswith('_QC')]:
+    #             test_name = test_col_name.replace('_QC', '')
+                
+    #             # df_raw에서 해당 Test 항목의 상태를 확인해야 하지만, summary_data만 접근 가능.
+                
+    #             # 이 루프를 단순화합니다.
+    #             row_test_data = row_data.copy()
+    #             row_test_data['Test'] = test_name
+    #             final_table_data.append(row_test_data)
+
+
+    # if not final_table_data:
+    #     st.warning("summary_data에서 일치하는 데이터 포인트를 찾을 수 없습니다.")
+    #     return None
+
+    # summary_df = pd.DataFrame(final_table_data)
+
+    for row in jig_date_combinations:
+        current_jig = row.get(jig_col)
+        current_date = row.get('Date')
+        current_date_iso = current_date.strftime("%Y-%m-%d")
         
         day_summary = summary_data.get(current_jig, {}).get(current_date_iso, {})
         
         if day_summary:
-            # 이 루프에서 모든 QC 항목을 확인해야 하지만, 여기서는 핵심 요약만 사용합니다.
-            
-            # [수정] true/false defect의 세부 카운트를 직접 사용
+            # 모든 QC 항목에 대한 분리된 카운트를 포함하도록 행 데이터 구성
             row_data = {
-                'Date': row['Date'],
+                'Date': current_date,
                 'Jig': current_jig,
-                'Pass': day_summary.get('pass', 0),
                 
-                # 가성불량 (False Defect)
+                # 기본 QC 상태
+                'Pass': day_summary.get('pass', 0),
+                '미달 (Under)': day_summary.get('true_defect_미달', 0) + day_summary.get('false_defect_미달', 0), # 총 미달
+                '초과 (Over)': day_summary.get('true_defect_초과', 0) + day_summary.get('false_defect_초과', 0),   # 총 초과
+                '제외 (Excluded)': day_summary.get('true_defect_제외', 0) + day_summary.get('false_defect_제외', 0), # 총 제외
+                
+                # ⭐ [핵심 맵핑]: 가성불량 및 진성불량 세부 카운트
                 '가성불량': day_summary.get('false_defect', 0),
                 '가성불량_미달': day_summary.get('false_defect_미달', 0),
                 '가성불량_초과': day_summary.get('false_defect_초과', 0),
                 '가성불량_제외': day_summary.get('false_defect_제외', 0),
                 
-                # 진성불량 (True Defect)
                 '진성불량': day_summary.get('true_defect', 0),
                 '진성불량_미달': day_summary.get('true_defect_미달', 0),
                 '진성불량_초과': day_summary.get('true_defect_초과', 0),
                 '진성불량_제외': day_summary.get('true_defect_제외', 0),
-                
-                'Failure': day_summary.get('fail', 0),
-                'Total': day_summary.get('total_test', 0),
-                'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') # pass_rate 대신 fail_rate 필요
-            }
-            # Test 항목은 이 요약 데이터에 없으므로, 데이터 불일치 발생.
-            # (이전 테이블은 QC 컬럼별로 행을 생성했기 때문에 Test 항목이 있었습니다.)
-            # Test 항목별로 분리하기 위해, day_summary의 세부 데이터를 재분석해야 합니다.
-            
-            # 이 방법은 너무 복잡하므로, 단일 Test 항목만 가정하고 진행하거나,
-            # 테이블의 필터링 범위를 유지하고, Test 항목은 DF에 있는 Test 항목 목록을 사용합니다.
-            
-            # [재시도]: summary_data의 세부 data_list를 재분석하여 Test 항목별로 행을 만듭니다.
-            
-            for test_col_name in [col for col in df_raw.columns if col.endswith('_QC')]:
-                test_name = test_col_name.replace('_QC', '')
-                
-                # df_raw에서 해당 Test 항목의 상태를 확인해야 하지만, summary_data만 접근 가능.
-                
-                # 이 루프를 단순화합니다.
-                row_test_data = row_data.copy()
-                row_test_data['Test'] = test_name
-                final_table_data.append(row_test_data)
 
+                'Total': day_summary.get('total_test', 0),
+                # [수정] Failure 카운트는 '진성불량' + '가성불량'
+                'Failure': day_summary.get('fail', 0), 
+            }
+            final_table_data.append(row_data)
 
     if not final_table_data:
-        st.warning("summary_data에서 일치하는 데이터 포인트를 찾을 수 없습니다.")
+        st.warning("Summary Data에서 일치하는 데이터 포인트를 찾을 수 없습니다. (필터 조건 확인 필요)")
+        st.session_state['summary_df_for_chart'] = None
         return None
 
     summary_df = pd.DataFrame(final_table_data)
+    
+    # 4. 최종 계산 및 컬럼 정리
+    
+    # Failure Rate 계산
+    summary_df['Failure Rate (%)'] = (summary_df['Failure'] / summary_df['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
     
     # -------------------------------------------------------------
     # ⭐ [최종 컬럼 순서 재정의]: 모든 항목을 분리하여 배치
@@ -247,13 +317,29 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         'Failure Rate (%)'
     ]
     
-    # DF에 없는 컬럼은 제거하고 순서대로 재배열
-    final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
+    # # DF에 없는 컬럼은 제거하고 순서대로 재배열
+    # final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
 
-    summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
+    # summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
     
-    # 세션 상태에 저장 및 반환
-    st.session_state['summary_df_for_chart'] = summary_df 
+    # # 세션 상태에 저장 및 반환
+    # st.session_state['summary_df_for_chart'] = summary_df 
+    # return summary_df 
+
+    summary_df = summary_df[[col for col in final_cols if col in summary_df.columns]].sort_values(by=['Date', 'Jig'])
+    
+    # [수정] 차트 로직을 위해 'Test' 컬럼 재구성 (현재 요약 테이블은 Test 항목별로 분리되어 있지 않음)
+    # Test 항목별 분리: 현재 코드는 Test 항목별 합산이므로, Test 컬럼을 추가합니다.
+    test_names = [col.replace('_QC', '') for col in qc_columns]
+    
+    # summary_data는 Test 항목별로 분리된 데이터가 아니므로, Test 항목 개수만큼 행을 복제합니다.
+    # 이 부분은 매우 비효율적이므로, 데이터 구조에 맞게 Test 컬럼을 추가하지 않거나,
+    # '총합' 행을 추가하는 방식으로 변경해야 합니다.
+    
+    # [최종 결정]: 테이블은 현재 일자/Jig별 합산으로 출력하고, Test 컬럼은 제거합니다.
+    # (Traceback 오류를 해결하고 기능이 작동하도록 하기 위한 임시 방편입니다.)
+    
+    st.session_state['summary_df_for_chart'] = summary_df.copy()
     return summary_df 
 
 
