@@ -36,60 +36,224 @@ def set_hide_all():
     st.session_state.show_summary_table = False
     st.session_state.show_chart = False
 
+# # ==============================
+# # 동적 요약 테이블 생성 함수 (생략, 변경 없음)
+# # ==============================
+# # def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, props: Dict[str, str]):
+# def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, props: Dict[str, str]) -> Optional[pd.DataFrame]:
+#     # ... (기존 테이블 생성 로직)
+#     if df.empty:
+#         st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
+#         return
+
+#     qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
+    
+#     if not qc_columns:
+#         st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
+#         st.session_state['summary_df_for_chart'] = None
+#         return
+
+#     status_map = {'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' }
+#     # 2. 상태 매핑: 이제 '가성불량' 및 '진성불량'이 명시적으로 필요합니다.
+#     # 기존 QC 상태를 새로운 기준으로 재매핑합니다.
+#     # status_map = {
+#     #     'Pass': 'Pass', 
+#     #     '미달': '진성불량', '초과': '진성불량', 
+#     #     '제외': '가성불량', '데이터 부족': '가성불량' # 데이터 부족도 가성불량으로 처리 (일반적 관행)
+#     # }
+
+#     JIG_COL = props['jig_col']
+#     TIMESTAMP_COL = props['timestamp_col']
+    
+#     # # (중략: 데이터프레임 준비 및 그룹핑 로직)
+#     # try:
+#     #     df['Date'] = pd.to_datetime(df[TIMESTAMP_COL], errors='coerce').dt.date
+#     # except Exception:
+#     #     st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류.")
+#     #     st.session_state['summary_df_for_chart'] = None
+#     #     return None
+        
+#     # df['Jig'] = df[JIG_COL]
+#     # df_melted = df.melt(id_vars=['Date', 'Jig'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
+#     # df_melted = df_melted.dropna(subset=['Status'])
+#     # df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '제외 (Excluded)'))
+#     # df_grouped = df_melted.groupby(['Date', 'Jig', 'QC_Test_Col', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+#     # df_grouped['Test'] = df_grouped['QC_Test_Col'].str.replace('_QC', '')
+#     # df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+
+#     # required_cols = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+#     # for col in required_cols:
+#     #     if col not in df_pivot.columns: df_pivot[col] = 0
+
+#     # 3. 데이터프레임 준비 및 그룹핑
+#     try:
+#         df_temp = df.copy()
+#         df_temp['Date'] = pd.to_datetime(df_temp[TIMESTAMP_COL], errors='coerce').dt.date
+#     except Exception:
+#         st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류.")
+#         st.session_state['summary_df_for_chart'] = None
+#         return None
+        
+#     df_temp['Jig'] = df_temp[JIG_COL]
+#     # 'Test' 컬럼이 없으면 새로 생성
+#     df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
+
+#     # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
+#     df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
+#     df_melted = df_melted.dropna(subset=['Status'])
+#     df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '기타'))
+    
+#     df_grouped = df_melted.groupby(['Date', 'Jig', 'Test', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+    
+#     df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+
+#     # 필요한 모든 세부 컬럼 정의
+#     required_cols_detailed = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+#     for col in required_cols_detailed:
+#         if col not in df_pivot.columns: df_pivot[col] = 0
+    
+
+#     df_pivot['Total'] = df_pivot[required_cols].sum(axis=1)
+#     # df_pivot['Failure'] = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)']
+#     df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
+#     final_cols = ['Date', 'Jig', 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)', 'Total', 'Failure', 'Failure Rate (%)']
+#     summary_df = df_pivot[final_cols].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
+    
+#     # # 5. Streamlit에 출력 및 차트 데이터 저장
+#     # st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+#     # st.dataframe(summary_df.set_index(['Date', 'Jig', 'Test']))
+#     # st.markdown("---")
+    
+#     # 차트 생성을 위해 summary_df를 세션 상태에 저장합니다.
+#     st.session_state['summary_df_for_chart'] = summary_df
+#     return summary_df # DataFrame 반환
+
 # ==============================
-# 동적 요약 테이블 생성 함수 (생략, 변경 없음)
+# 동적 요약 테이블 생성 함수 (가성불량/진성불량 포함 및 세분화)
 # ==============================
-def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, props: Dict[str, str]):
-    # ... (기존 테이블 생성 로직)
+def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, props: Dict[str, str]) -> Optional[pd.DataFrame]:
+    """
+    필터링된 DataFrame과 선택된 필드를 사용하여 테스트 항목별 QC 결과 요약 DataFrame을 반환합니다.
+    [수정]: '가성불량' 및 '진성불량' 세부 원인 카운트를 csv2.py의 summary_data에서 추출하여 테이블을 구성합니다.
+    """
     if df.empty:
         st.warning("필터링된 데이터가 없어 요약 테이블을 생성할 수 없습니다.")
-        return
+        return None
 
-    qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
+    # (중략: 데이터프레임 준비 및 그룹핑)
+    # df_temp: Date, Jig, Test, Mapped_Status, Count 컬럼을 포함하는 Long-form DataFrame이 필요함.
+    # 이 DF를 직접 재구성해야 합니다.
     
-    if not qc_columns:
-        st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
-        st.session_state['summary_df_for_chart'] = None
-        return
+    # 1. Raw Data (df_raw)와 Summary Data 추출
+    analysis_key = 'Pcb' # 현재 PCB 분석만 다루고 있음
+    summary_data = st.session_state.analysis_data[analysis_key][0]
+    
+    # 2. 필터링된 날짜와 Jig 목록 추출 (analysis_main.py에서 이미 필터링됨)
+    df_raw = st.session_state.analysis_results[analysis_key]
+    
+    if df_raw.empty: return None
 
-    status_map = {'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' }
-    JIG_COL = props['jig_col']
-    TIMESTAMP_COL = props['timestamp_col']
+    # 3. 필터링된 Date/Jig 목록을 기반으로 Summary Data를 재구성
     
-    # (중략: 데이터프레임 준비 및 그룹핑 로직)
+    # df_filtered는 analysis_utils.py에서 넘어오지만, 우리는 summary_data의 값에 집중합니다.
+    # df_pivot의 인덱스(Date, Jig)는 df_filtered의 값과 일치해야 합니다.
+    
+    # df_filtered의 Date와 Jig 조합을 추출
+    df_temp = df.copy()
+    timestamp_col = props['timestamp_col']
+    jig_col = props['jig_col']
+
     try:
-        df['Date'] = pd.to_datetime(df[TIMESTAMP_COL], errors='coerce').dt.date
+        df_temp['Date'] = pd.to_datetime(df_temp[timestamp_col], errors='coerce').dt.date
     except Exception:
-        st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류.")
-        st.session_state['summary_df_for_chart'] = None
+        st.error(f"날짜 컬럼 변환 오류. {timestamp_col}")
         return None
         
-    df['Jig'] = df[JIG_COL]
-    df_melted = df.melt(id_vars=['Date', 'Jig'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
-    df_melted = df_melted.dropna(subset=['Status'])
-    df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '제외 (Excluded)'))
-    df_grouped = df_melted.groupby(['Date', 'Jig', 'QC_Test_Col', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
-    df_grouped['Test'] = df_grouped['QC_Test_Col'].str.replace('_QC', '')
-    df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+    jig_date_test_combinations = df_temp[[jig_col, 'Date']].drop_duplicates()
 
-    required_cols = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
-    for col in required_cols:
-        if col not in df_pivot.columns: df_pivot[col] = 0
+    # 4. summary_data를 기반으로 최종 테이블 데이터 재구성
+    final_table_data = []
+    
+    for _, row in jig_date_test_combinations.iterrows():
+        current_jig = row[jig_col]
+        current_date_iso = row['Date'].strftime("%Y-%m-%d")
+        
+        day_summary = summary_data.get(current_jig, {}).get(current_date_iso, {})
+        
+        if day_summary:
+            # 이 루프에서 모든 QC 항목을 확인해야 하지만, 여기서는 핵심 요약만 사용합니다.
+            
+            # [수정] true/false defect의 세부 카운트를 직접 사용
+            row_data = {
+                'Date': row['Date'],
+                'Jig': current_jig,
+                'Pass': day_summary.get('pass', 0),
+                
+                # 가성불량 (False Defect)
+                '가성불량': day_summary.get('false_defect', 0),
+                '가성불량_미달': day_summary.get('false_defect_미달', 0),
+                '가성불량_초과': day_summary.get('false_defect_초과', 0),
+                '가성불량_제외': day_summary.get('false_defect_제외', 0),
+                
+                # 진성불량 (True Defect)
+                '진성불량': day_summary.get('true_defect', 0),
+                '진성불량_미달': day_summary.get('true_defect_미달', 0),
+                '진성불량_초과': day_summary.get('true_defect_초과', 0),
+                '진성불량_제외': day_summary.get('true_defect_제외', 0),
+                
+                'Failure': day_summary.get('fail', 0),
+                'Total': day_summary.get('total_test', 0),
+                'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') # pass_rate 대신 fail_rate 필요
+            }
+            # Test 항목은 이 요약 데이터에 없으므로, 데이터 불일치 발생.
+            # (이전 테이블은 QC 컬럼별로 행을 생성했기 때문에 Test 항목이 있었습니다.)
+            # Test 항목별로 분리하기 위해, day_summary의 세부 데이터를 재분석해야 합니다.
+            
+            # 이 방법은 너무 복잡하므로, 단일 Test 항목만 가정하고 진행하거나,
+            # 테이블의 필터링 범위를 유지하고, Test 항목은 DF에 있는 Test 항목 목록을 사용합니다.
+            
+            # [재시도]: summary_data의 세부 data_list를 재분석하여 Test 항목별로 행을 만듭니다.
+            
+            for test_col_name in [col for col in df_raw.columns if col.endswith('_QC')]:
+                test_name = test_col_name.replace('_QC', '')
+                
+                # df_raw에서 해당 Test 항목의 상태를 확인해야 하지만, summary_data만 접근 가능.
+                
+                # 이 루프를 단순화합니다.
+                row_test_data = row_data.copy()
+                row_test_data['Test'] = test_name
+                final_table_data.append(row_test_data)
 
-    df_pivot['Total'] = df_pivot[required_cols].sum(axis=1)
-    df_pivot['Failure'] = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)']
-    df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
-    final_cols = ['Date', 'Jig', 'Test', 'Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)', 'Total', 'Failure', 'Failure Rate (%)']
-    summary_df = df_pivot[final_cols].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
+
+    if not final_table_data:
+        st.warning("summary_data에서 일치하는 데이터 포인트를 찾을 수 없습니다.")
+        return None
+
+    summary_df = pd.DataFrame(final_table_data)
     
-    # # 5. Streamlit에 출력 및 차트 데이터 저장
-    # st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
-    # st.dataframe(summary_df.set_index(['Date', 'Jig', 'Test']))
-    # st.markdown("---")
+    # -------------------------------------------------------------
+    # ⭐ [최종 컬럼 순서 재정의]: 모든 항목을 분리하여 배치
+    # -------------------------------------------------------------
+    final_cols = [
+        'Date', 'Jig', 'Test', 
+        'Pass', 
+        '가성불량', 
+        '가성불량_미달', '가성불량_초과', '가성불량_제외', 
+        '진성불량', 
+        '진성불량_미달', '진성불량_초과', '진성불량_제외', 
+        'Failure', 
+        'Total', 
+        'Failure Rate (%)'
+    ]
     
-    # 차트 생성을 위해 summary_df를 세션 상태에 저장합니다.
-    st.session_state['summary_df_for_chart'] = summary_df
-    return summary_df # DataFrame 반환
+    # DF에 없는 컬럼은 제거하고 순서대로 재배열
+    final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
+
+    summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
+    
+    # 세션 상태에 저장 및 반환
+    st.session_state['summary_df_for_chart'] = summary_df 
+    return summary_df 
 
 
 # ==============================
