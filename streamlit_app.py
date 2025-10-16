@@ -59,18 +59,19 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
     
     if not qc_columns:
-        st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
-        st.session_state['summary_df_for_chart'] = None
+        # st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
+        # st.session_state['summary_df_for_chart'] = None
+        st.error("테이블 생성 불가: 데이터에 _QC 컬럼이 존재하지 않습니다.")
         return None
 
     # analysis_key = 'Pcb'
     # summary_data = st.session_state.analysis_data[analysis_key][0]
     
      # 2. 상태 매핑 및 데이터프레임 준비 (생략)
-    status_map = {
-        'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
-        '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
-    }
+    # status_map = {
+    #     'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
+    #     '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
+    # }
 
 
     # # 1. QC 컬럼 식별
@@ -95,6 +96,10 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
 
     JIG_COL = props.get('jig_col')
     TIMESTAMP_COL = props.get('timestamp_col')
+
+    analysis_key = 'Pcb'
+    summary_data = st.session_state.analysis_data[analysis_key][0]
+    
     
     # 3. 데이터프레임 준비 및 Date/Jig 추출
     try:
@@ -102,53 +107,110 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         df_temp['Date'] = pd.to_datetime(df_temp[TIMESTAMP_COL], errors='coerce').dt.date
     except Exception:
         st.error(f"테이블 생성 실패: 날짜 컬럼({TIMESTAMP_COL}) 변환 오류.")
-        st.session_state['summary_df_for_chart'] = None
+        # st.session_state['summary_df_for_chart'] = None
         return None
         
     df_temp['Jig'] = df_temp[JIG_COL] # 이미 analysis_utils에서 생성됨
-    df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
+    # df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
     
-    # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
-    df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
-    df_melted = df_melted.dropna(subset=['Status'])
-    df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '기타'))
-    
-    df_grouped = df_melted.groupby(['Date', 'Jig', 'Test', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
-    
-    df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+    # 4. Summary Data를 기반으로 최종 테이블 데이터 재구성
+    final_table_data = []
 
-    required_cols_detailed = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
-    for col in required_cols_detailed:
-        if col not in df_pivot.columns: df_pivot[col] = 0
+    jig_date_combinations = df_temp[[JIG_COL, 'Date']].drop_duplicates().itertuples(index=False)
+
+    for row in jig_date_combinations:
+        current_jig = getattr(row, JIG_COL.replace(' ', '_'))
+        current_date = getattr(row, 'Date')
+        current_date_iso = current_date.strftime("%Y-%m-%d")
         
-    # [수정] 가성/진성 불량 세부 원인 및 총합 계산 로직 (유지)
-    df_pivot['가성불량_미달'] = df_pivot['미달 (Under)']
-    df_pivot['가성불량_초과'] = df_pivot['초과 (Over)']
-    df_pivot['가성불량_제외'] = df_pivot['제외 (Excluded)']
-    df_pivot['진성불량_미달'] = df_pivot['미달 (Under)']
-    df_pivot['진성불량_초과'] = df_pivot['초과 (Over)']
-    df_pivot['진성불량_제외'] = df_pivot['제외 (Excluded)']
-    
-    total_non_pass = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)'] + df_pivot['제외 (Excluded)']
-    
-    df_pivot['가성불량'] = total_non_pass
-    df_pivot['진성불량'] = total_non_pass
+        day_summary = summary_data.get(current_jig, {}).get(current_date_iso, {})
+        
+        if day_summary:
+            row_data = {
+                'Date': current_date,
+                'Jig': current_jig,
+                
+                'Pass': day_summary.get('pass', 0),
+                
+                # ⭐ [핵심 수정]: 가성불량 총합은 가성불량 세부 항목만 합산합니다.
+                '가성불량_미달': day_summary.get('false_defect_미달', 0),
+                '가성불량_초과': day_summary.get('false_defect_초과', 0),
+                '가성불량_제외': day_summary.get('false_defect_제외', 0),
+                '가성불량': day_summary.get('false_defect_미달', 0) + day_summary.get('false_defect_초과', 0) + day_summary.get('false_defect_제외', 0),
+                
+                # ⭐ [핵심 수정]: 진성불량 총합은 진성불량 세부 항목만 합산합니다.
+                '진성불량_미달': day_summary.get('true_defect_미달', 0),
+                '진성불량_초과': day_summary.get('true_defect_초과', 0),
+                '진성불량_제외': day_summary.get('true_defect_제외', 0),
+                '진성불량': day_summary.get('true_defect_미달', 0) + day_summary.get('true_defect_초과', 0) + day_summary.get('true_defect_제외', 0),
+                
+                'Failure': day_summary.get('fail', 0),
+                'Total': day_summary.get('total_test', 0),
+                'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') 
+            }
+            final_table_data.append(row_data)
 
-    df_pivot['Failure'] = total_non_pass
-    df_pivot['Total'] = df_pivot['Pass'] + df_pivot['Failure']
-    df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
+    if not final_table_data:
+        st.warning("Summary Data에서 일치하는 데이터 포인트를 찾을 수 없습니다. (필터 조건 확인 필요)")
+        return None
+
+    summary_df = pd.DataFrame(final_table_data)
+    # [수정] Final_cols 정의는 로직을 따르도록 재구성
     
+    # 4. 최종 컬럼 순서 및 정리
     final_cols = [
-        'Date', 'Jig', 'Test', 'Pass', '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
-        '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 'Failure', 'Total', 'Failure Rate (%)'
+        'Date', 'Jig', 'Pass', 
+        '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
+        '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 
+        'Failure', 'Total', 'Failure Rate (%)'
     ]
     
-    final_cols_filtered = [col for col in final_cols if col in df_pivot.columns]
+    final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
 
-    summary_df = df_pivot[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
+    summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
     
-    # st.session_state['summary_df_for_chart'] = summary_df # <-- [수정] 차트 데이터 저장 주석 처리
     return summary_df 
+    # # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
+    # df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
+    # df_melted = df_melted.dropna(subset=['Status'])
+    # df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '기타'))
+    
+    # df_grouped = df_melted.groupby(['Date', 'Jig', 'Test', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+    
+    # df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+
+    # required_cols_detailed = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
+    # for col in required_cols_detailed:
+    #     if col not in df_pivot.columns: df_pivot[col] = 0
+        
+    # # [수정] 가성/진성 불량 세부 원인 및 총합 계산 로직 (유지)
+    # df_pivot['가성불량_미달'] = df_pivot['미달 (Under)']
+    # df_pivot['가성불량_초과'] = df_pivot['초과 (Over)']
+    # df_pivot['가성불량_제외'] = df_pivot['제외 (Excluded)']
+    # df_pivot['진성불량_미달'] = df_pivot['미달 (Under)']
+    # df_pivot['진성불량_초과'] = df_pivot['초과 (Over)']
+    # df_pivot['진성불량_제외'] = df_pivot['제외 (Excluded)']
+    
+    # total_non_pass = df_pivot['미달 (Under)'] + df_pivot['초과 (Over)'] + df_pivot['제외 (Excluded)']
+    
+    # df_pivot['가성불량'] = total_non_pass
+    # df_pivot['진성불량'] = total_non_pass
+
+    # df_pivot['Failure'] = total_non_pass
+    # df_pivot['Total'] = df_pivot['Pass'] + df_pivot['Failure']
+    # df_pivot['Failure Rate (%)'] = (df_pivot['Failure'] / df_pivot['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
+    
+    # final_cols = [
+    #     'Date', 'Jig', 'Test', 'Pass', '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
+    #     '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 'Failure', 'Total', 'Failure Rate (%)'
+    # ]
+    
+    # final_cols_filtered = [col for col in final_cols if col in df_pivot.columns]
+
+    # summary_df = df_pivot[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
+    
+    # # st.session_state['summary_df_for_chart'] = summary_df # <-- [수정] 차트 데이터 저장 주석 처리
+    # return summary_df 
 
     # # # [수정] row 객체의 속성에 접근할 수 있도록 .itertuples(index=False) 사용 가정
     # # analysis_key = 'Pcb'
