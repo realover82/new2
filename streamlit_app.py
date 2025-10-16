@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 # import altair as alt
 from typing import Dict 
+from typing import Dict, Optional
 
 # 1. 기능별 분할된 모듈 임포트
 from config import ANALYSIS_KEYS, TAB_PROPS_MAP
