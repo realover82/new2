@@ -193,16 +193,29 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         return None
     
     df_temp['Jig'] = df_temp[JIG_COL]
-    df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
+    # df_temp['Test'] = df_temp['QC_Test_Col'].str.replace('_QC', '') if 'QC_Test_Col' in df_temp.columns else (df_temp[qc_columns[0]].apply(lambda x: qc_columns[0].replace('_QC', '')) if qc_columns else pd.NA)
 
     # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
-    df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
+    # df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
+    # df_melted = df_melted.dropna(subset=['Status'])
+    # df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '기타'))
+    
+    df_melted = df_temp.melt(id_vars=['Date', 'Jig'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status') # Test 컬럼 제거
     df_melted = df_melted.dropna(subset=['Status'])
     df_melted['Mapped_Status'] = df_melted['Status'].apply(lambda x: status_map.get(x, '기타'))
     
-    df_grouped = df_melted.groupby(['Date', 'Jig', 'Test', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+
+    # df_grouped = df_melted.groupby(['Date', 'Jig', 'Test', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+    
+    # df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+
+    # [수정]: GroupBy에 Test 항목 이름 추가
+    df_grouped = df_melted.groupby(['Date', 'Jig', 'QC_Test_Col', 'Mapped_Status'], dropna=False).size().reset_index(name='Count')
+    
+    df_grouped['Test'] = df_grouped['QC_Test_Col'].str.replace('_QC', '')
     
     df_pivot = df_grouped.pivot_table(index=['Date', 'Jig', 'Test'], columns='Mapped_Status', values='Count', fill_value=0).reset_index()
+
 
     # 필요한 모든 세부 컬럼 정의
     required_cols_detailed = ['Pass', '미달 (Under)', '초과 (Over)', '제외 (Excluded)']
@@ -258,7 +271,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     summary_df = df_pivot[final_cols_filtered].sort_values(by=['Date', 'Jig', 'Test']).reset_index(drop=True)
     
     st.session_state['summary_df_for_chart'] = summary_df 
-    # return summary_df     
+    return summary_df     
 
     # # 3. Summary Data를 기반으로 최종 테이블 데이터 재구성
     # # final_table_data = []
