@@ -255,7 +255,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # summary_df = pd.DataFrame(final_table_data)
 
     for row in jig_date_combinations:
-        current_jig = row.get(jig_col)
+        current_jig = row.get(JIG_COL)
         current_date = row.get('Date')
         current_date_iso = current_date.strftime("%Y-%m-%d")
         
