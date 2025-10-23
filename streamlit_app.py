@@ -170,27 +170,48 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         st.warning("Summary Data에서 일치하는 데이터 포인트를 찾을 수 없습니다. (필터 조건 확인 필요)")
         return None
 
-    summary_df = pd.DataFrame(final_table_data)
+    # summary_df = pd.DataFrame(final_table_data)
     # [수정] Final_cols 정의는 로직을 따르도록 재구성
     # [수정] Failure Rate를 Total Failure를 기반으로 다시 계산
     # Failure는 이미 day_summary에서 계산되어 들어왔으므로, 최종 Failure Rate를 계산합니다.
+    # summary_df['Total'] = summary_df['Pass'] + summary_df['Failure']
+    # summary_df['Failure Rate (%)'] = (summary_df['Failure'] / summary_df['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
+
+    # #
+    # # 4. 최종 컬럼 순서 및 정리
+    # final_cols = [
+    #     'Date', 'Jig', 'Pass', 
+    #     '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
+    #     '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 
+    #     'Failure', 'Total', 'Failure Rate (%)'
+    # ]
+    
+    # final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
+
+    # summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
+    
+    # return summary_df 
+    # [수정] 최종 컬럼 순서 및 정리
+    summary_df = pd.DataFrame(final_table_data)
+    summary_df['Failure'] = summary_df['가성불량_미달'] + summary_df['가성불량_초과'] + summary_df['가성불량_제외'] + \
+                            summary_df['진성불량_미달'] + summary_df['진성불량_초과'] + summary_df['진성불량_제외']
+
     summary_df['Total'] = summary_df['Pass'] + summary_df['Failure']
     summary_df['Failure Rate (%)'] = (summary_df['Failure'] / summary_df['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
-
-    #
-    # 4. 최종 컬럼 순서 및 정리
+    
+    # [수정] 최종 컬럼 정의: 필터링은 메인 함수에서 수행하도록 변경
     final_cols = [
-        'Date', 'Jig', 'Pass', 
-        '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
-        '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 
-        'Failure', 'Total', 'Failure Rate (%)'
+        'Date', 'Jig', 'Pass', '가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외', 
+        '진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외', 'Failure', 'Total', 'Failure Rate (%)'
     ]
     
     final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
 
     summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
     
-    return summary_df 
+    return summary_df
+
+
     # # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
     # df_melted = df_temp.melt(id_vars=['Date', 'Jig', 'Test'], value_vars=qc_columns, var_name='QC_Test_Col', value_name='Status')
     # df_melted = df_melted.dropna(subset=['Status'])
@@ -424,9 +445,51 @@ def main():
         
     # A) 테이블 출력 로직
     if st.session_state.show_summary_table and summary_df_display is not None:
+        # st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+        # # st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
+        # st.dataframe(summary_df_display.set_index(['Date', 'Jig'])) # <-- [핵심 수정]: 'Test' 컬럼 제거
+        # st.markdown("---")
+
+        # [핵심 수정]: 상세 내역의 선택된 필드를 기반으로 테이블 컬럼 필터링
+        
+        # 1. 'Test' 항목이 선택되었는지 확인합니다.
+        selected_test_columns = [col for col in selected_fields_for_table if not col.endswith('_QC')]
+        
+        # 2. 필터링 기준이 될 최종 컬럼 목록을 생성합니다.
+        # 필수 컬럼: Date, Jig, Pass, Failure, Total, Failure Rate (%)
+        # 동적 컬럼: 선택된 Test 항목에 해당하는 모든 QC 컬럼 (가성_미달, 진성_미달 등)
+        
+        final_display_cols = ['Date', 'Jig', 'Pass', 'Failure', 'Total', 'Failure Rate (%)']
+        
+        for test_col in selected_test_columns:
+            # 예: 'PcbCurr'를 선택했다면, '가성불량_미달'과 같은 QC 컬럼을 추가해야 함
+            # (이 로직은 복잡하므로, 일단 모든 가성/진성 세부 컬럼을 포함하도록 단순화합니다.)
+            pass_cols = ['Pass', 'Failure', 'Total', 'Failure Rate (%)']
+            
+            # [수정]: 선택된 필드에 'Pass' 또는 'Failure'가 포함되어 있다면 해당 컬럼을 유지합니다.
+            # 모든 가성/진성 세부 컬럼을 기본적으로 포함하고, 원치 않는 항목을 제거하는 방식으로 접근합니다.
+            
+            dynamic_qc_cols = []
+            
+            # 가성불량 세부 컬럼 추가 (반드시 포함)
+            dynamic_qc_cols.extend(['가성불량', '가성불량_미달', '가성불량_초과', '가성불량_제외'])
+            
+            # 진성불량 세부 컬럼 추가 (반드시 포함)
+            dynamic_qc_cols.extend(['진성불량', '진성불량_미달', '진성불량_초과', '진성불량_제외'])
+            
+            # 최종 컬럼 목록
+            final_display_cols = list(set(final_display_cols + dynamic_qc_cols))
+            
+            # 필터링 및 순서 정렬
+            output_df = summary_df_display[[col for col in final_display_cols if col in summary_df_display.columns]].copy()
+            
+            st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
+            st.dataframe(output_df.set_index(['Date', 'Jig']))
+            st.markdown("---")
+            return
+            
         st.subheader("PCB 테스트 항목별 QC 결과 요약 테이블 (일별/Jig별)")
-        # st.dataframe(summary_df_display.set_index(['Date', 'Jig', 'Test']))
-        st.dataframe(summary_df_display.set_index(['Date', 'Jig'])) # <-- [핵심 수정]: 'Test' 컬럼 제거
+        st.dataframe(summary_df_display.set_index(['Date', 'Jig']))
         st.markdown("---")
             
     # # B) 차트 출력 로직 (st.bar_chart 사용)
