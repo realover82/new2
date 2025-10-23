@@ -132,21 +132,37 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
                 
                 'Pass': day_summary.get('pass', 0),
                 
-                # ⭐ [핵심 수정]: 가성불량 총합은 가성불량 세부 항목만 합산합니다.
+                # # ⭐ [핵심 수정]: 가성불량 총합은 가성불량 세부 항목만 합산합니다.
+                # '가성불량_미달': day_summary.get('false_defect_미달', 0),
+                # '가성불량_초과': day_summary.get('false_defect_초과', 0),
+                # '가성불량_제외': day_summary.get('false_defect_제외', 0),
+                # '가성불량': day_summary.get('false_defect_미달', 0) + day_summary.get('false_defect_초과', 0) + day_summary.get('false_defect_제외', 0),
+                
+                # # ⭐ [핵심 수정]: 진성불량 총합은 진성불량 세부 항목만 합산합니다.
+                # '진성불량_미달': day_summary.get('true_defect_미달', 0),
+                # '진성불량_초과': day_summary.get('true_defect_초과', 0),
+                # '진성불량_제외': day_summary.get('true_defect_제외', 0),
+                # '진성불량': day_summary.get('true_defect_미달', 0) + day_summary.get('true_defect_초과', 0) + day_summary.get('true_defect_제외', 0),
+                
+                # 'Failure': day_summary.get('fail', 0),
+                # 'Total': day_summary.get('total_test', 0),
+                # 'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') 
+                # [수정] Pass/Fail 및 가성/진성 총합은 day_summary에서 직접 가져옵니다.
+                'Pass': day_summary.get('pass', 0),
+                
+                '가성불량': day_summary.get('false_defect', 0),
                 '가성불량_미달': day_summary.get('false_defect_미달', 0),
                 '가성불량_초과': day_summary.get('false_defect_초과', 0),
                 '가성불량_제외': day_summary.get('false_defect_제외', 0),
-                '가성불량': day_summary.get('false_defect_미달', 0) + day_summary.get('false_defect_초과', 0) + day_summary.get('false_defect_제외', 0),
                 
-                # ⭐ [핵심 수정]: 진성불량 총합은 진성불량 세부 항목만 합산합니다.
+                '진성불량': day_summary.get('true_defect', 0),
                 '진성불량_미달': day_summary.get('true_defect_미달', 0),
                 '진성불량_초과': day_summary.get('true_defect_초과', 0),
                 '진성불량_제외': day_summary.get('true_defect_제외', 0),
-                '진성불량': day_summary.get('true_defect_미달', 0) + day_summary.get('true_defect_초과', 0) + day_summary.get('true_defect_제외', 0),
                 
                 'Failure': day_summary.get('fail', 0),
                 'Total': day_summary.get('total_test', 0),
-                'Failure Rate (%)': day_summary.get('pass_rate', '0.0%') 
+                'Failure Rate (%)': day_summary.get('pass_rate', '0.0%')
             }
             final_table_data.append(row_data)
 
@@ -156,6 +172,11 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
 
     summary_df = pd.DataFrame(final_table_data)
     # [수정] Final_cols 정의는 로직을 따르도록 재구성
+    # [수정] Failure Rate를 Total Failure를 기반으로 다시 계산
+    # Failure는 이미 day_summary에서 계산되어 들어왔으므로, 최종 Failure Rate를 계산합니다.
+    summary_df['Total'] = summary_df['Pass'] + summary_df['Failure']
+    summary_df['Failure Rate (%)'] = (summary_df['Failure'] / summary_df['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
+    
     
     # 4. 최종 컬럼 순서 및 정리
     final_cols = [
