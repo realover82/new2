@@ -176,8 +176,8 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # Failure는 이미 day_summary에서 계산되어 들어왔으므로, 최종 Failure Rate를 계산합니다.
     summary_df['Total'] = summary_df['Pass'] + summary_df['Failure']
     summary_df['Failure Rate (%)'] = (summary_df['Failure'] / summary_df['Total'] * 100).apply(lambda x: f"{x:.1f}%" if x == x else "0.0%")
-    
-    
+
+    #
     # 4. 최종 컬럼 순서 및 정리
     final_cols = [
         'Date', 'Jig', 'Pass', 
