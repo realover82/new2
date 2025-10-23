@@ -56,8 +56,13 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # summary_data = st.session_state.analysis_data[analysis_key][0]
     
     # # 2. 필수 컬럼 및 상태 맵핑 (로직 유지)
-    qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
-    
+    # if not qc_columns:
+    # qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
+    qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
+
+    if not qc_columns:
+        qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
+
     if not qc_columns:
         # st.warning("테이블 생성 불가: '상세 내역'에서 _QC로 끝나는 품질 관리 컬럼을 1개 이상 선택해 주세요.")
         # st.session_state['summary_df_for_chart'] = None
@@ -77,21 +82,21 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # # 1. QC 컬럼 식별
     # # [핵심 수정]: df_raw 대신 df를 사용합니다.
     # qc_columns = [col for col in selected_fields if col.endswith('_QC') and col in df.columns and df[col].dtype == object]
-    qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
-    # if not qc_columns:
-    #     # 선택된 QC 컬럼이 없지만, DF에 QC 컬럼이 존재하면 모두 포함
-    #     qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
+    # qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
+    # # if not qc_columns:
+    # #     # 선택된 QC 컬럼이 없지만, DF에 QC 컬럼이 존재하면 모두 포함
+    # #     qc_columns = [col for col in df.columns if col.endswith('_QC') and df[col].dtype == object]
     
-    if not qc_columns:
-        st.error("테이블 생성 불가: 데이터에 _QC 컬럼이 존재하지 않습니다.")
-        # st.session_state['summary_df_for_chart'] = None
-        return None
+    # if not qc_columns:
+    #     st.error("테이블 생성 불가: 데이터에 _QC 컬럼이 존재하지 않습니다.")
+    #     # st.session_state['summary_df_for_chart'] = None
+    #     return None
 
     # 2. 상태 매핑 및 데이터프레임 준비 (생략)
-    status_map = {
-        'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
-        '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
-    }
+    # status_map = {
+    #     'Pass': 'Pass', '미달': '미달 (Under)', '초과': '초과 (Over)', 
+    #     '제외': '제외 (Excluded)', '데이터 부족': '제외 (Excluded)' 
+    # }
     
 
     JIG_COL = props.get('jig_col')
@@ -150,14 +155,14 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
                 # [수정] Pass/Fail 및 가성/진성 총합은 day_summary에서 직접 가져옵니다.
                 'Pass': day_summary.get('pass', 0),
                 
-                # '가성불량': day_summary.get('false_defect', 0),
-                '가성불량_총합': day_summary.get('false_defect', 0),
+                '가성불량': day_summary.get('false_defect', 0),
+                # '가성불량_총합': day_summary.get('false_defect', 0),
                 '가성불량_미달': day_summary.get('false_defect_미달', 0),
                 '가성불량_초과': day_summary.get('false_defect_초과', 0),
                 '가성불량_제외': day_summary.get('false_defect_제외', 0),
                 
-                # '진성불량': day_summary.get('true_defect', 0),
-                '진성불량_총합': day_summary.get('true_defect', 0),
+                '진성불량': day_summary.get('true_defect', 0),
+                # '진성불량_총합': day_summary.get('true_defect', 0),
                 '진성불량_미달': day_summary.get('true_defect_미달', 0),
                 '진성불량_초과': day_summary.get('true_defect_초과', 0),
                 '진성불량_제외': day_summary.get('true_defect_제외', 0),
@@ -172,7 +177,7 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         st.warning("Summary Data에서 일치하는 데이터 포인트를 찾을 수 없습니다. (필터 조건 확인 필요)")
         return None
 
-    # summary_df = pd.DataFrame(final_table_data)
+    summary_df = pd.DataFrame(final_table_data)
     # [수정] Final_cols 정의는 로직을 따르도록 재구성
     # [수정] Failure Rate를 Total Failure를 기반으로 다시 계산
     # Failure는 이미 day_summary에서 계산되어 들어왔으므로, 최종 Failure Rate를 계산합니다.
@@ -188,11 +193,11 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
         'Failure', 'Total', 'Failure Rate (%)'
     ]
     
-    # final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
+    final_cols_filtered = [col for col in final_cols if col in summary_df.columns]
 
-    # summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
+    summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
     
-    # return summary_df 
+    return summary_df 
     # [수정] 최종 컬럼 순서 및 정리
     # summary_df = pd.DataFrame(final_table_data)
     # summary_df['Failure'] = summary_df['가성불량_미달'] + summary_df['가성불량_초과'] + summary_df['가성불량_제외'] + \
@@ -214,22 +219,22 @@ def generate_dynamic_summary_table(df: pd.DataFrame, selected_fields: list, prop
     # return summary_df
 
     # 컬럼 이름 재정의 (출력용)
-    output_column_mapping = {
-        '가성불량_총합': '가성불량', 
-        '진성불량_총합': '진성불량'
-    }
-    summary_df = summary_df.rename(columns=output_column_mapping)
+    # output_column_mapping = {
+    #     '가성불량_총합': '가성불량', 
+    #     '진성불량_총합': '진성불량'
+    # }
+    # summary_df = summary_df.rename(columns=output_column_mapping)
     
-    # 출력 컬럼 필터링
-    output_final_cols = [col for col in final_cols if col not in ['가성불량_총합', '진성불량_총합']]
-    output_final_cols = [output_column_mapping.get(col, col) for col in output_final_cols]
+    # # 출력 컬럼 필터링
+    # output_final_cols = [col for col in final_cols if col not in ['가성불량_총합', '진성불량_총합']]
+    # output_final_cols = [output_column_mapping.get(col, col) for col in output_final_cols]
     
     # DF에 없는 컬럼은 제거하고 순서대로 재배열
-    final_cols_filtered = [col for col in output_final_cols if col in summary_df.columns]
+    # final_cols_filtered = [col for col in output_final_cols if col in summary_df.columns]
 
-    summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
+    # summary_df = summary_df[final_cols_filtered].sort_values(by=['Date', 'Jig']).reset_index(drop=True)
     
-    return summary_df
+    # return summary_df
 
 
     # # DF Melt, Group, Pivot: 모든 세부 상태별 카운트 획득
